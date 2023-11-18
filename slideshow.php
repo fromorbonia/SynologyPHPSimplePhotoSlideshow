@@ -1,10 +1,10 @@
 <?php
 
 // Interval is the number of seconds between each photo
-$interval = '15';
+$interval = '60';
 
 // photoDir is the directory containing photos and/or subdirectories of photos. The path is relative to the directory containing this php file
-$photoDir = '../photos';
+$photoDir = '../photo/Our Photos/2015';
 
 // photoExt is the file extension of the photos. Do not include '.'. Not case-sensitive.
 $photoExt = 'jpg';
@@ -81,6 +81,8 @@ if(empty($_SESSION['photos'])) {
  $_SESSION['photos'] = getDirContents($photoDir, '/\.' . $photoExt . '$/i');
 }
 
+//echo '<div class="alert alert-danger">DSD:'.var_dump($_SESSION['photos']).'</div>';
+
 // Check the age of the array containing file names and destroy the session if the age exceeds $rescanAfter
 // This forces a rescan of $photoDir on the next page refresh if the age of the file list exceeds $rescanAfter
 $arrayAge = time() - $_SESSION['LastFileScan'];
@@ -92,18 +94,20 @@ if($arrayAge > ($recanAfter * 60)){
 do {
  $random = array_rand($_SESSION['photos'],1);
  $photo = str_replace($_SERVER['DOCUMENT_ROOT'],"",$_SESSION['photos'][$random]);
+ $photo = '/image.php?path='. urlencode( substr($photo, strlen('/volume1/photo')) );
 } while (stristr($photo,$excludeText));
 
 
 // Get the DateTimeOriginal field from the photo EXIF data
 $photoExif = exif_read_data($_SESSION['photos'][$random],'IFD0');
 $photoYear = date("Y",strtotime($photoExif['DateTimeOriginal']));
+$photoMonth = date("M",strtotime($photoExif['DateTimeOriginal']));
 
 // Display the filename of the photo and DateTimeOriginal
-echo("<h2>Year: $photoYear &nbsp;&nbsp;&nbsp; File: " . basename($photo) . "</h2>");
+echo("<h2>Year: $photoYear &nbsp;&nbsp;&nbsp; Month: " . $photoMonth  . "</h2>");
 
 ?>
 <img src="<?=$photo?>"/>
+<p>hi</p>
 </body>
 </html>
-
