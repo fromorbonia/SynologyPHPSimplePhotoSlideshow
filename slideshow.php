@@ -1,10 +1,13 @@
 <?php
 
+require_once 'slidefunctions.php';
+$config = configGet('slideconfig.json');
+
 // Interval is the number of seconds between each photo
-$interval = '60';
+$interval = $config['display']['interval'];
 
 // photoDir is the directory containing photos and/or subdirectories of photos. The path is relative to the directory containing this php file
-$photoDir = '../photo/Our Photos/2015';
+$photoDir = '../photo/Our Photos/2014';
 
 // photoExt is the file extension of the photos. Do not include '.'. Not case-sensitive.
 $photoExt = 'jpg';
@@ -58,23 +61,6 @@ $excludeText = 'SYNOPHOTO_THUMB';
 // Session variables are used to prevent rescaning photo folders every time the page is refreshed.
 session_start();
 
-// Function getDirContents was written by stackoverflow user user2226755
-// URL: https://stackoverflow.com/questions/24783862/list-all-the-files-and-folders-in-a-directory-with-php-recursive-function
-function getDirContents($dir, $filter = '', &$results = array()) {
-    $files = scandir($dir);
-    foreach($files as $key => $value){
-        $path = realpath($dir.DIRECTORY_SEPARATOR.$value);
-        if(!is_dir($path)) {
-            if(empty($filter) || preg_match($filter, $path)) $results[] = $path;
-        } elseif($value != "." && $value != "..") {
-            getDirContents($path, $filter, $results);
-        }
-    }
-    // Store the current date and time in the session cookie
-    $_SESSION['LastFileScan'] = time();
-    //$_SESSION['LastFileScan'] = date('Y-m-d H:i:s');
-    return $results;
-}
 
 // If the list of photos is empty get a list of photos
 if(empty($_SESSION['photos'])) {

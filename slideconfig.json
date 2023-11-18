@@ -1,0 +1,13 @@
+{
+  "display": {
+    "interval": 10,
+    "backgroundColor": "black",
+    "textColor": "white"
+  },
+  "folders": [
+    {
+      "path": "../photo/Our Photos/2015",
+      "scan-sub-directories" : true
+    }
+  ]
+}
