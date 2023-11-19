@@ -1,0 +1,22 @@
+{
+  "display": {
+    "interval": 60,
+    "backgroundColor": "black",
+    "textColor": "white"
+  },
+  "playlist-root": "/volume1/photo",
+  "playlist": [
+    {
+      "path": "../photo/Our Photos",
+      "scan-sub-folders": true
+    },
+    {
+      "path": "../photo/AubPhone",
+      "scan-sub-folders": true
+    },
+    {
+      "path": "../photos/projects/Cal",
+      "scan-sub-folders": false
+    }
+  ]
+}
