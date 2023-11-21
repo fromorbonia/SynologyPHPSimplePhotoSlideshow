@@ -14,6 +14,8 @@ $interval = $config['display']['interval'];
 // photoExt is the file extension of the photos. Do not include '.'. Not case-sensitive.
 $photoExt = 'jpg';
 
+$errorForUser = '';
+
 // Background and text colors
 $backgroundColor = $config['display']['backgroundColor'];
 $textColor = $config['display']['textColor'];
@@ -79,45 +81,59 @@ $excludeText = 'SYNOPHOTO_THUMB';
     if(empty($_SESSION['photos'])) {
         $_SESSION['photos-folder'] = '-';
         $_SESSION['photos'] = playlistItemPhotos($_SESSION['playlist-item'], $photoExt, $_SESSION['photos-folder']);
+
+        if (empty($_SESSION['photos'])
+            || (count($_SESSION['photos']) <=0))
+        {
+            $errorForUser = 'Could not load any photos for playlist: ' . $_SESSION['playlist-item']['path'];
+        }
     }
 
-    // Check the age of the array containing file names and destroy the session if the age exceeds $rescanAfter
-    // This forces a rescan of $photoDir on the next page refresh if the age of the file list exceeds $rescanAfter
-    $arrayAge = time() - $_SESSION['LastFileScan'];
-    if($arrayAge > ($recanAfter * 60)){
-     session_destroy();
+    if (empty($errorForUser)) {
+        // Check the age of the array containing file names and destroy the session if the age exceeds $rescanAfter
+        // This forces a rescan of $photoDir on the next page refresh if the age of the file list exceeds $rescanAfter
+        $arrayAge = time() - $_SESSION['LastFileScan'];
+        if ($arrayAge > ($recanAfter * 60)) {
+            session_destroy();
+        }
+
+        // Select a random photo if the filename does not contain $excludeText
+        do {
+            $random = array_rand($_SESSION['photos'], 1);
+            $photo = str_replace($_SERVER['DOCUMENT_ROOT'], "", $_SESSION['photos'][$random]);
+            $photo = '/image.php?path=' . urlencode(substr($photo, strlen($config['playlist-root'])));
+        } while (stristr($photo, $excludeText));
+
+
+        // Get the DateTimeOriginal field from the photo EXIF data
+        $photoExif = exif_read_data($_SESSION['photos'][$random], 'IFD0');
+        $photoYear = '-';
+        $photoMonth = '-';
+        if (array_key_exists('DateTimeOriginal', $photoExif)) {
+            $photoYear = date("Y", strtotime($photoExif['DateTimeOriginal']));
+            $photoMonth = date("M", strtotime($photoExif['DateTimeOriginal']));
+        }
+        //Remove the photo from the array:
+        unset($_SESSION['photos'][$random]);
+
+        // Display the filename of the photo and DateTimeOriginal
+        echo ("<h2 class=\"ellipsis\">Year: " . $photoYear . "&nbsp;&nbsp;&nbsp; Month: " . $photoMonth . "&nbsp;&nbsp;&nbsp;" .
+            substr($_SESSION['photos-folder'], strlen($config['playlist-root']) + 1) . "</h2>");
     }
 
-    // Select a random photo if the filename does not contain $excludeText
-    do {
-     $random = array_rand($_SESSION['photos'],1);
-     $photo = str_replace($_SERVER['DOCUMENT_ROOT'],"",$_SESSION['photos'][$random]);
-     $photo = '/image.php?path='. urlencode( substr($photo, strlen($config['playlist-root'])) );
-    } while (stristr($photo,$excludeText));
-
-
-    // Get the DateTimeOriginal field from the photo EXIF data
-    $photoExif = exif_read_data($_SESSION['photos'][$random],'IFD0');
-    $photoYear = '-';
-    $photoMonth = '-';
-    if (array_key_exists('DateTimeOriginal', $photoExif)) {
-        $photoYear = date("Y", strtotime($photoExif['DateTimeOriginal']));
-        $photoMonth = date("M", strtotime($photoExif['DateTimeOriginal']));
-    }
-    //Remove the photo from the array:
-    unset($_SESSION['photos'][$random]);
-
-    if (empty($_SESSION['photos'])){
+    if (empty($_SESSION['photos'])) {
         //Time to fetch a new set of photos, by clearing
-        $_SESSION['playlist-item'];
+        $_SESSION['playlist-item'] = null;
     }
 
-    // Display the filename of the photo and DateTimeOriginal
-    echo("<h2 class=\"ellipsis\">Year: ". $photoYear ."&nbsp;&nbsp;&nbsp; Month: " . $photoMonth  . "&nbsp;&nbsp;&nbsp;".
-        substr($_SESSION['photos-folder'], strlen($config['playlist-root'])+1) . "</h2>");
 
     ?>
 
-<img src="<?=$photo?>"/>
+<?php if (empty($errorForUser)) : ?>
+    <img src="<?=$photo?>"/>
+<?php else : ?>
+    <h2> <?php echo $errorForUser; ?> </h2>
+<?php endif; ?>
+
 </body>
 </html>
