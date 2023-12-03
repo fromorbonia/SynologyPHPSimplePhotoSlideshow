@@ -1,38 +1,38 @@
 <?php
 
-$request = $_SERVER['REQUEST_URI'];
+// Use session variable for current photo to avoid using url to transfer 
+// Previous version passed path to this page, but not great from a security perspective 
+session_start();
 
-error_log('incoming = '.$request.'*');
 
-$querystring=explode('?', $request);
+if (!empty($_SESSION['photo-current'])) {
 
-if (count($querystring) > 1)
-{
-    $pathparts=explode('=', $querystring[1]);
-    $pathparts=urldecode($pathparts[1]);
+    $path = $_SESSION['photo-current'];
 
-    $path= '/volume1/photo/' . $pathparts;
-    error_log('image = '.$path.'*');
+    error_log('image = ' . $path . '*');
 
     if (file_exists($path)) {
 
-       $image_info = getimagesize($path);
+        $image_info = getimagesize($path);
 
-       //Set the content-type header as appropriate
-       header('Content-Type: ' . $image_info['mime']);
+        //Set the content-type header as appropriate
+        header('Content-Type: ' . $image_info['mime']);
 
-       //Set the content-length header
-       header('Content-Length: ' . filesize($path));
+        //Set the content-length header
+        header('Content-Length: ' . filesize($path));
 
-       //Write the image bytes to the client
-       readfile($path);
-       exit;
-    }
-    else { // Image file not found
+        //Write the image bytes to the client
+        readfile($path);
+        exit;
+    } else { // Image file not found
 
         header($_SERVER["SERVER_PROTOCOL"] . " 404 Not Found");
 
     }
+}
+else
+{
+    error_log('Session photo-current empty');
 }
 
 ?>
