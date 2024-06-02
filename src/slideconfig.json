@@ -2,7 +2,8 @@
   "display": {
     "interval": 60,
     "backgroundColor": "black",
-    "textColor": "white"
+    "textColor": "white",
+    "rescanAfter": 45
   },
   "playlist-root": "/volume1/photo",
   "playlist": [
@@ -11,12 +12,14 @@
       "scan-sub-folders": true
     },
     {
-      "path": "../photo/AubPhone",
-      "scan-sub-folders": true
+      "path": "../photos/More photos/projects/Cal 12",
+      "scan-sub-folders": false
     },
     {
-      "path": "../photos/projects/Cal",
-      "scan-sub-folders": false
+      "path": "../photos/New York",
+      "scan-sub-folders": false,
+      "max-photos-per-select": 10
     }
+
   ]
 }

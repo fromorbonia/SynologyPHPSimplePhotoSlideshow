@@ -2,7 +2,7 @@
 
 Simple, PHP only, slideshow designed to allow older iPads with unsupported iOS to be turned into picture frames. This project is focused on a Synology deployment, but any server with PHP and photos can be used.
 
-This came out with frustration that the colour and display quality just beats almost all the digital photo frames. Alongside them often needing a memory card installing. I have holder iPads that still work, but there are no apps available on the older iOS. The apps available also tend not to have the options I want, e.g. just changing the length of time each photo is displayed.
+This came out with frustration that the colour and display quality of an iPad just beats almost all the digital photo frames. Alongside many digital frames needing a memory card installing. I have holder iPads that still work, but there are no apps available on the older iOS. The apps available also tend not to have the options I want, e.g. just changing the length of time each photo is displayed.
 
 
 ### Configuration

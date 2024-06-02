@@ -20,7 +20,7 @@ $backgroundColor = $config['display']['backgroundColor'];
 $textColor = $config['display']['textColor'];
 
 // Number of minutes after which the photo directory will be rescanned. The rescan is triggered by recreating the session to force a file rescan
-$recanAfter = 30;
+$rescanAfter = $config['display']['rescanAfter'];
 
 // Don't display photos with the following text in the filename. Not case sensitive.
 $excludeText = 'SYNOPHOTO_THUMB';
@@ -79,6 +79,7 @@ $excludeText = 'SYNOPHOTO_THUMB';
     // This should also detect when the array is empty
     if(empty($_SESSION['photos'])) {
         $_SESSION['photos-folder'] = '-';
+        $_SESSION['photos-displayed-count'] = 0;
         $_SESSION['photos'] = playlistItemPhotos($_SESSION['playlist-item'], $photoExt, $_SESSION['photos-folder']);
 
         if (empty($_SESSION['photos'])
@@ -92,12 +93,14 @@ $excludeText = 'SYNOPHOTO_THUMB';
         // Check the age of the array containing file names and destroy the session if the age exceeds $rescanAfter
         // This forces a rescan of $photoDir on the next page refresh if the age of the file list exceeds $rescanAfter
         $arrayAge = time() - $_SESSION['LastFileScan'];
-        if ($arrayAge > ($recanAfter * 60)) {
+        if ($arrayAge > ($rescanAfter * 60)) {
             session_destroy();
         }
 
-        // Select a random photo if the filename does not contain $excludeText
+        //Delete the currrent selected photo, which has already been removed from the list of photos
         unset($_SESSION['photo-current']);
+
+        // Select a random photo if the filename does not contain $excludeText
         $photosCount = count($_SESSION['photos']);
 
         while ($photosCount > 0){
@@ -128,15 +131,27 @@ $excludeText = 'SYNOPHOTO_THUMB';
                     // Display the filename of the photo and DateTimeOriginal
                     echo ("<h2 class=\"ellipsis\">Year: " . $photoYear . "&nbsp;&nbsp;&nbsp; Month: " . $photoMonth . "&nbsp;&nbsp;&nbsp;" .
                         substr($_SESSION['photos-folder'], strlen($config['playlist-root']) + 1) . "</h2>");
+                    
+                    $_SESSION['photos-displayed-count'] += 1;
 
+                    if ((isset($_SESSION['playlist-item']['max-photos-per-select']))
+                        && ($_SESSION['photos-displayed-count']>= $_SESSION['playlist-item']['max-photos-per-select']))
+                    {
+                        //Exceeded the maximum number of photos for this cycle, so clear list 
+                        unset($_SESSION['photos']);
+                    }
+                        
                     break;
                 } else {
                     error_log('Photo found in initial scan, but file does not exist = ' . $photo);
                 }
             }
 
-            //File not suitable, remove the photo from the array, and get the next one
-            unset($_SESSION['photos'][$random]);
+            if (!empty($_SESSION['photos']))
+            {
+                //No matter what, remove the photo from the array, ready to get the next one
+                unset($_SESSION['photos'][$random]);
+            }
         }
 
     }
