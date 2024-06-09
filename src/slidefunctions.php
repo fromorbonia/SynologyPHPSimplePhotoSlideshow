@@ -1,5 +1,9 @@
 <?php
 
+//**************************************************************
+//    Common functions
+//**************************************************************
+
 
 function configGet ($configFile) {
     $config_data = file_get_contents($configFile);
@@ -27,6 +31,27 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
     }
 }
 
+function playlistScanBuild ($Playlist) {
+    $playlistSizeMap = array();
+
+    foreach($Playlist as $key => $plitem){
+        $folderCount = 1;
+
+        if ($plitem['scan-sub-folders']) {
+            $folders = null;
+            dirSubFoldersGet($plitem['path'], $folders, true);
+            $folderCount += count($folders);
+        }
+        echo "dir=".$plitem['path']." has foldercount=".$folderCount."\r\n";
+        //print_r($folders);
+                        //var_dump($folders);
+        echo "key=".$key;
+        array_push($playlistSizeMap, array_fill(0, $folderCount, $key)); 
+    };
+
+    return $playlistSizeMap;
+}
+
 // Function getDirContents was written by stackoverflow user user2226755
 // URL: https://stackoverflow.com/questions/24783862/list-all-the-files-and-folders-in-a-directory-with-php-recursive-function
 function dirContentsGet($dir, $filter = '', &$results = array()) {
@@ -45,18 +70,45 @@ function dirContentsGet($dir, $filter = '', &$results = array()) {
     return $results;
 }
 
-function dirSubFoldersGet($dir, &$results = array())
+//Folders one level deep, when $recurse=false.
+//In recursion the resulting list is flat, so simple count can be used
+function dirSubFoldersGet($dir, 
+    &$results = array(),
+    $recurse = false)
 {
-    $files = scandir($dir);
+    try {
+        //echo "Scanning dir=".$dir."\n";
 
-    foreach ($files as $key => $value) {
-        $path = realpath($dir . DIRECTORY_SEPARATOR . $value);
-        if ((is_dir($path))
-            && ($value !='.')
-            && ($value != '..')){
-                $results[] = $path;
+        $files = scandir($dir);
+
+        foreach($files as $key => $value) {
+            if (($value !=='.')
+                && ($value !== '..')) 
+            {
+                $path = realpath($dir . DIRECTORY_SEPARATOR . $value);
+                //echo "subpath=".$path."\n";
+                if ((!str_ends_with($path, '@eaDir'))
+                    && (is_dir($path))){
+                        //echo "isdir=".$path."\r\n";
+                        //echo "\n";
+                
+                        $results[] = $path;
+                        if ($recurse)
+                        {
+                            dirSubFoldersGet($path, $results, true);
+                        }
+                }
+            }
         }
     }
+    catch (Exception $e)
+    {
+        error_log('dirSubFoldersGet problem for = ' . $dir);
+    }
+
     return $results;
 }
+
+
+
 ?>

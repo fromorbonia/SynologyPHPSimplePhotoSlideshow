@@ -7,7 +7,8 @@ This came out with frustration that the colour and display quality of an iPad ju
 
 ### Configuration
 
-This is a simple slideshow programme that scans a directory for images and displays them in a random order.
+This is a simple slideshow programme that is folder centric, so if you use folders to store and group your photos this is ideal.
+It scans a directory for images and displays them in a random order.
 
 The scanned directory can contain images or subdirectories containing images.
 
