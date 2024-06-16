@@ -26,10 +26,19 @@ $rescanAfter = $config['display']['rescanAfter'];
 
 // Don't display photos with the following text in the filename. Not case sensitive.
 $excludeText = 'SYNOPHOTO_THUMB';
-playlistScanBuild($config['playlist']);
+
+//Build simple array reflecting number of folders in each playlist - there will be a more elegant way
+if(empty($_SESSION['playlist-size-map'])){
+    $_SESSION['playlist-size-map'] = playlistScanBuild($config['playlist']);
+}
 
 //Setup and run photo selection using $SESSION variables:
-PrepAndSelect($config['playlist'], $config['playlist-root'], $photoExt, $rescanAfter, $excludeText);
+PrepAndSelect($_SESSION['playlist-size-map'], 
+    $config['playlist'],
+    $config['playlist-root'], 
+    $photoExt, 
+    $rescanAfter, 
+    $excludeText);
 
 
 ?>
@@ -62,8 +71,9 @@ PrepAndSelect($config['playlist'], $config['playlist-root'], $photoExt, $rescanA
             color: <?=$textColor?>;
             background: <?=$backgroundColor?>;
             font: bold 1.5em Helvetica, Sans-Serif;
-            position: absolute;
+            position: fixed;
             bottom: 0px;
+            margin-bottom: 0px;
             text-align: center;
             width: 100%;
         }

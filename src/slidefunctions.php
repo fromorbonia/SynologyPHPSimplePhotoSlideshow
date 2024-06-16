@@ -10,9 +10,9 @@ function configGet ($configFile) {
     return json_decode($config_data, true);
 }
 
-function playlistPick ($playlist) {
-    $key = array_rand($playlist, 1);
-    return $playlist[$key];
+function playlistPick ($PlaylistMap, $Playlist) {
+    $key = array_rand($PlaylistMap, 1);
+    return $Playlist[$key];
 }
 
 function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
@@ -26,7 +26,6 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
         $dirKey = array_rand($dirs, 1);
         $retPhotos = dirContentsGet($dirs[$dirKey], '/\.' . $photoExt . '$/i');
         $photoFolder = $dirs[$dirKey];
-        echo $photoFolder;
         return $retPhotos;
     }
 }
@@ -40,12 +39,9 @@ function playlistScanBuild ($Playlist) {
         if ($plitem['scan-sub-folders']) {
             $folders = null;
             dirSubFoldersGet($plitem['path'], $folders, true);
-            $folderCount += count($folders);
+            $folderCount = count($folders);
         }
-        echo "dir=".$plitem['path']." has foldercount=".$folderCount."\r\n";
-        //print_r($folders);
-                        //var_dump($folders);
-        echo "key=".$key;
+
         array_push($playlistSizeMap, array_fill(0, $folderCount, $key)); 
     };
 
@@ -77,7 +73,6 @@ function dirSubFoldersGet($dir,
     $recurse = false)
 {
     try {
-        //echo "Scanning dir=".$dir."\n";
 
         $files = scandir($dir);
 
@@ -86,11 +81,9 @@ function dirSubFoldersGet($dir,
                 && ($value !== '..')) 
             {
                 $path = realpath($dir . DIRECTORY_SEPARATOR . $value);
-                //echo "subpath=".$path."\n";
+
                 if ((!str_ends_with($path, '@eaDir'))
                     && (is_dir($path))){
-                        //echo "isdir=".$path."\r\n";
-                        //echo "\n";
                 
                         $results[] = $path;
                         if ($recurse)
@@ -109,6 +102,17 @@ function dirSubFoldersGet($dir,
     return $results;
 }
 
+function stringSplitLast($Input, $Split) {
+    $ret = '';
 
+    $parts = explode($Split, $Input);
+
+    if (($parts) && (count($parts)>0))
+    {
+        $ret = end($parts);
+    }
+
+    return $ret;
+}
 
 ?>

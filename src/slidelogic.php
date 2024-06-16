@@ -4,7 +4,8 @@
 //    Primary logic for selecting and photo to display
 //**************************************************************
 
-function PrepAndSelect($Playlist,
+function PrepAndSelect($PlaylistMap,
+    $Playlist,
     $PlaylistRoot,
     $PhotoExt,
     $RescanAfter,
@@ -12,9 +13,10 @@ function PrepAndSelect($Playlist,
 
     if(empty($_SESSION['playlist-item'])){
         //No current folder active, so choose one at random:
-        $_SESSION['playlist-item'] = playlistPick($Playlist);
+        //var_dump($PlaylistMap);
+        $_SESSION['playlist-item'] = playlistPick($PlaylistMap, $Playlist);
+        var_dump($_SESSION['playlist-item']);
         $_SESSION['photos'] = null;
-        playlistScanBuild($Playlist);
     }
     
     // If the list of photos is empty, then get a list of photos
@@ -66,13 +68,19 @@ function PrepAndSelect($Playlist,
                         $photoMonth = date("M", strtotime($photoExif['DateTimeOriginal']));
                     }
     
-    
+                    $plName = stringSplitLast($_SESSION['playlist-item']['path'], '/');
+                    $fldName = stringSplitLast($_SESSION['photos-folder'], '/');
+                    if (($fldName) && ($plName != $fldName)) {
+                        $plName = $plName . ' - ' . $fldName;
+                    }
+
+
                     //Set the current photo for image.php to display
                     $_SESSION['photo-current'] = $photo;
     
                     // Display the filename of the photo and DateTimeOriginal
                     echo ("<h2 class=\"ellipsis\">Year: " . $photoYear . "&nbsp;&nbsp;&nbsp; Month: " . $photoMonth . "&nbsp;&nbsp;&nbsp;" .
-                        substr($_SESSION['photos-folder'], strlen($PlaylistRoot) + 1) . "</h2>");
+                        $plName . "</h2>");
                     
                     $_SESSION['photos-displayed-count'] += 1;
     
@@ -94,6 +102,8 @@ function PrepAndSelect($Playlist,
                 //No matter what, remove the photo from the array, ready to get the next one
                 unset($_SESSION['photos'][$random]);
             }
+
+            $photosCount -= 1;
         }
     
     }
