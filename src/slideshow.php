@@ -13,6 +13,8 @@ $config = configGet('slideconfig.json');
 $backgroundColor = $config['display']['backgroundColor'];
 $textColor = $config['display']['textColor'];
 
+// ChatGPT came up with some background colours for a cream iPad: Light Grey (#E0E0E0); Off-White (#F5F5F5); Silver (#C0C0C0)
+
 
 // Interval is the number of seconds between each photo
 $interval = $config['display']['interval'];
@@ -30,6 +32,12 @@ $excludeText = 'SYNOPHOTO_THUMB';
 //Build simple array reflecting number of folders in each playlist - there will be a more elegant way
 if(empty($_SESSION['playlist-size-map'])){
     $_SESSION['playlist-size-map'] = playlistScanBuild($config['playlist']);
+    $_SESSION['playlist-scanid'] = date('d-H:i:s');
+    $logObj = [ 'log' => 'map',
+        'scanID' => $_SESSION['playlist-scanid'], 
+        'playlist-len' => count($config['playlist']),
+        'playlist-sm-len' => count($_SESSION['playlist-size-map'])];
+    error_log(json_encode($logObj));
 }
 
 //Setup and run photo selection using $SESSION variables:

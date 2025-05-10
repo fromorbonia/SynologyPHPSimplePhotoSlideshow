@@ -4,12 +4,18 @@
 // Previous version passed path to this page, but not great from a security perspective 
 session_start();
 
+require_once 'slidefunctions.php';
 
 if (!empty($_SESSION['photo-current'])) {
 
     $path = $_SESSION['photo-current'];
 
-    error_log('image = ' . $path . '*');
+    $file = stringSplitLast($path, '/');
+    $logObj = ['log' => 'image',
+        'scanID' => $_SESSION['playlist-scanid'], 
+        'path'=> substr($path, 0, (strlen($path) - strlen($file))),
+        'file' => $file  ]; 
+    error_log(json_encode($logObj));
 
     if (file_exists($path)) {
 

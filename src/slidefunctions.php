@@ -11,7 +11,8 @@ function configGet ($configFile) {
 }
 
 function playlistPick ($PlaylistMap, $Playlist) {
-    $key = array_rand($PlaylistMap, 1);
+    $r = new \Random\Randomizer();
+    $key = $r->pickArrayKeys($PlaylistMap, 1);
     return $Playlist[$key];
 }
 
