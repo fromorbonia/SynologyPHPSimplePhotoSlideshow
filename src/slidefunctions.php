@@ -11,9 +11,15 @@ function configGet ($configFile) {
 }
 
 function playlistPick ($PlaylistMap, $Playlist) {
-    $r = new \Random\Randomizer();
-    $key = $r->pickArrayKeys($PlaylistMap, 1);
-    return $Playlist[$key];
+    $total = count($PlaylistMap);
+    $rd = random_int(0, $total-1);
+    $val = array_values($PlaylistMap)[$rd];
+    $logObj = [ 'log' => 'playlistPick',
+        'scanID' => $_SESSION['playlist-scanid'], 
+        'rand' => $rd,
+        'idx to use' => $val];
+    error_log(json_encode($logObj));
+    return $Playlist[$val];
 }
 
 function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
@@ -24,7 +30,7 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
         return dirContentsGet($plitem['path'], '/\.' . $photoExt . '$/i');
     } else {
         $dirs = dirSubFoldersGet($plitem['path']);
-        $dirKey = array_rand($dirs, 1);
+        $dirKey = array_keys($dirs)[random_int(0, count($dirs)-1)];
         $retPhotos = dirContentsGet($dirs[$dirKey], '/\.' . $photoExt . '$/i');
         $photoFolder = $dirs[$dirKey];
         return $retPhotos;
@@ -43,7 +49,7 @@ function playlistScanBuild ($Playlist) {
             $folderCount = count($folders);
         }
 
-        array_push($playlistSizeMap, array_fill(0, $folderCount, $key)); 
+        $playlistSizeMap = array_merge($playlistSizeMap, array_fill(0, $folderCount, $key)); 
     };
 
     return $playlistSizeMap;

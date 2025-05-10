@@ -38,6 +38,8 @@ function PrepAndSelect($PlaylistMap,
         // This forces a rescan of $photoDir on the next page refresh if the age of the file list exceeds $rescanAfter
         $arrayAge = time() - $_SESSION['LastFileScan'];
         if ($arrayAge > ($RescanAfter * 60)) {
+            //TODO: destory loses the view history from the last hour...
+            //      Maybe just deteect change in number of folders and destroy at that point
             session_destroy();
         }
     
