@@ -8,7 +8,6 @@ session_start();
 
 
 $config = configGet('slideconfig.json');
-$_SESSION['config-modified'] = filemtime('slideconfig.json');
 
 // Background and text colors
 $backgroundColor = $config['display']['backgroundColor'];

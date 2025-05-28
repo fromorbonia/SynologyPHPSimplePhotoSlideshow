@@ -51,7 +51,11 @@ function PrepAndSelect($PlaylistMap,
                     $sessionRestart = true;
                 }
             } else {
-                if ($_SESSION['config-modified'] <> filemtime('slideconfig.json'))
+                
+                if (empty($_SESSION['config-modified'])) {
+                    $_SESSION['config-modified'] = filemtime('slideconfig.json');
+                }
+                else if ($_SESSION['config-modified'] != filemtime('slideconfig.json'))
                 {
                     error_log('Config modified - destroy session');
                     session_destroy();
