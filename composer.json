@@ -1,0 +1,25 @@
+{
+    "name": "fromorbonia/synology-php-simple-photo-slideshow",
+    "description": "Simple PHP photo slideshow for Synology NAS",
+    "type": "project",
+    "require": {
+        "php": ">=8"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5"
+    },
+    "autoload": {
+        "files": [
+            "src/slidefunctions.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-html coverage"
+    }
+}

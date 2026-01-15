@@ -50,6 +50,25 @@ To install you do need to carry out a few tasks that will vary depending on the 
     * If you want full screen you can create a short cut by using the Share icon
     * You will want to disable screen lock after x minutes
 
+
+### Development and Testing
+
+#### Installing Dependencies
+
+This project uses Composer for dependency management and PHPUnit for testing.
+
+1. **Install Composer** (if not already installed):
+   - **Windows**: Download from [getcomposer.org](https://getcomposer.org/download/)
+   - **Linux/Mac**: 
+     ```bash
+     php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+     php composer-setup.php
+     sudo mv composer.phar /usr/local/bin/composer
+     ```
+ 
+### Running tests in VS Code
+In VS Code terminal use: ```.\vendor\bin\phpunit tests```
+
 ### Acknowledgements
 I had been putting off trying this because small projects always turn into a long saga, but [c0f](https://github.com/c0f/SimpleRandomPhotoSlideshow) allowed me to prototype and prove end to with just a couple of hours effort. It worked so forked the repo and extending it.
 

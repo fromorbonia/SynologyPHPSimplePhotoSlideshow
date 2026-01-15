@@ -1,5 +1,26 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
-################################################################################
+﻿/.vs
 
-/.vs
+# Composer dependencies
+/vendor/
+
+# PHPUnit
+/coverage/
+.phpunit.result.cache
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Synology metadata
+@eaDir/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
