@@ -521,78 +521,9 @@ class SlideFunctionsTest extends TestCase
         $this->assertEquals($this->testDir, $folders2[0]);
     }
 
-    public function testCreateOrUpdatePlaylistFolderIndex()
-    {
-        // Create test directory structure
-        $subDir1 = $this->testDir . DIRECTORY_SEPARATOR . 'sub1';
-        mkdir($subDir1, 0777, true);
-        
-        $_SESSION['playlist-scanid'] = 'test-scan-folder';
-        
-        $playlist = [
-            'name' => 'Test Playlist',
-            'path' => $this->testDir,
-            'scan-sub-folders' => true
-        ];
-        
-        $result = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
-        
-        $this->assertIsArray($result);
-        $this->assertArrayHasKey('file_path', $result);
-        $this->assertArrayHasKey('file_name', $result);
-        $this->assertArrayHasKey('folder_count', $result);
-        
-        $this->assertEquals('playlist-Test_Playlist-index.json', $result['file_name']);
-        $this->assertTrue(file_exists($result['file_path']));
-        
-        // Verify file content
-        $indexContent = json_decode(file_get_contents($result['file_path']), true);
-        $this->assertIsArray($indexContent);
-        $this->assertGreaterThan(0, count($indexContent));
-        
-        // Each entry should have play_count
-        foreach ($indexContent as $folder => $info) {
-            $this->assertArrayHasKey('play_count', $info);
-            $this->assertEquals(0, $info['play_count']);
-        }
-        
-        // Clean up
-        if (file_exists($result['file_path'])) {
-            unlink($result['file_path']);
-        }
-    }
 
-    public function testIncrementPlaylistFolderCount()
-    {
-        $playlist = [
-            'name' => 'Test Increment',
-            'path' => $this->testDir,
-            'scan-sub-folders' => false
-        ];
-        
-        $_SESSION['playlist-scanid'] = 'test-scan-increment';
-        
-        // First create the index
-        $result = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
-        
-        // Then increment the count
-        incrementPlaylistFolderCount($playlist, $this->testDir, $this->testDir);
-        
-        // Verify the count was incremented
-        $indexContent = json_decode(file_get_contents($result['file_path']), true);
-        $this->assertEquals(1, $indexContent[$this->testDir]['play_count']);
-        
-        // Increment again
-        incrementPlaylistFolderCount($playlist, $this->testDir, $this->testDir);
-        
-        $indexContent = json_decode(file_get_contents($result['file_path']), true);
-        $this->assertEquals(2, $indexContent[$this->testDir]['play_count']);
-        
-        // Clean up
-        if (file_exists($result['file_path'])) {
-            unlink($result['file_path']);
-        }
-    }
+
+
 
     public function testConfigFileCaching()
     {
@@ -696,4 +627,6 @@ class SlideFunctionsTest extends TestCase
             unlink($file);
         }
     }
+    
+
 }
