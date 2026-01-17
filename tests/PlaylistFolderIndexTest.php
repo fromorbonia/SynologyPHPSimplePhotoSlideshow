@@ -183,4 +183,121 @@ class PlaylistFolderIndexTest extends TestCase
             $this->assertEquals($originalGuids[$folderPath], $data['guid'], "GUID should be preserved for folder: $folderPath");
         }
     }
+
+    public function testCreateOrUpdateFolderPictureIndex()
+    {
+        $_SESSION['playlist-scanid'] = 'test-scan-picture-index';
+        
+        // Create test directory structure with photos
+        $subDir1 = $this->testDir . DIRECTORY_SEPARATOR . 'sub1';
+        mkdir($subDir1, 0777, true);
+        
+        // Create test photos
+        $photo1 = $subDir1 . DIRECTORY_SEPARATOR . 'photo1.jpg';
+        $photo2 = $subDir1 . DIRECTORY_SEPARATOR . 'photo2.jpg';
+        file_put_contents($photo1, 'test photo 1');
+        file_put_contents($photo2, 'test photo 2');
+        
+        // First create a playlist folder index so the folder has a GUID
+        $playlist = [
+            'name' => 'Picture Test Playlist',
+            'path' => $this->testDir,
+            'scan-sub-folders' => true
+        ];
+        
+        $folderIndexResult = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        
+        // Now test the picture index creation
+        $result = createOrUpdateFolderPictureIndex($subDir1, 'jpg', $this->testDir);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('file_path', $result);
+        $this->assertArrayHasKey('file_name', $result);
+        $this->assertArrayHasKey('picture_count', $result);
+        $this->assertArrayHasKey('changes_detected', $result);
+        
+        $this->assertEquals(2, $result['picture_count']);
+        $this->assertFalse($result['changes_detected']); // First creation, no changes
+        $this->assertTrue(file_exists($result['file_path']));
+        $this->assertMatchesRegularExpression('/folderpics-/', $result['file_name']);
+        $this->assertMatchesRegularExpression('/-index\.json$/', $result['file_name']);
+        
+        // Verify file content
+        $indexContent = json_decode(file_get_contents($result['file_path']), true);
+        $this->assertIsArray($indexContent);
+        $this->assertCount(2, $indexContent);
+        
+        // Each entry should have play_count of 0
+        foreach ($indexContent as $picturePath => $info) {
+            $this->assertArrayHasKey('play_count', $info);
+            $this->assertEquals(0, $info['play_count']);
+            $this->assertMatchesRegularExpression('/\.jpg$/', $picturePath);
+        }
+        
+        // Clean up
+        if (file_exists($result['file_path'])) {
+            unlink($result['file_path']);
+        }
+        if (file_exists($folderIndexResult['file_path'])) {
+            unlink($folderIndexResult['file_path']);
+        }
+    }
+
+    public function testCreateOrUpdateFolderPictureIndexWithChanges()
+    {
+        $_SESSION['playlist-scanid'] = 'test-scan-picture-changes';
+        
+        // Create test directory structure with photos
+        $subDir1 = $this->testDir . DIRECTORY_SEPARATOR . 'sub1';
+        mkdir($subDir1, 0777, true);
+        
+        // Create initial test photos
+        $photo1 = $subDir1 . DIRECTORY_SEPARATOR . 'photo1.jpg';
+        $photo2 = $subDir1 . DIRECTORY_SEPARATOR . 'photo2.jpg';
+        file_put_contents($photo1, 'test photo 1');
+        file_put_contents($photo2, 'test photo 2');
+        
+        // Create playlist folder index so the folder has a GUID
+        $playlist = [
+            'name' => 'Picture Changes Test',
+            'path' => $this->testDir,
+            'scan-sub-folders' => true
+        ];
+        
+        $folderIndexResult = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        
+        // Create initial picture index
+        $result1 = createOrUpdateFolderPictureIndex($subDir1, 'jpg', $this->testDir);
+        
+        // Manually update play counts to test reset behavior
+        $indexContent = json_decode(file_get_contents($result1['file_path']), true);
+        foreach ($indexContent as $picturePath => &$info) {
+            $info['play_count'] = 5; // Set to non-zero
+        }
+        file_put_contents($result1['file_path'], json_encode($indexContent, JSON_PRETTY_PRINT));
+        
+        // Add a new photo to trigger changes
+        $photo3 = $subDir1 . DIRECTORY_SEPARATOR . 'photo3.jpg';
+        file_put_contents($photo3, 'test photo 3');
+        
+        // Update the picture index
+        $result2 = createOrUpdateFolderPictureIndex($subDir1, 'jpg', $this->testDir);
+        
+        $this->assertTrue($result2['changes_detected']);
+        $this->assertEquals(3, $result2['picture_count']);
+        
+        // Verify all play counts were reset to 0
+        $updatedIndexContent = json_decode(file_get_contents($result2['file_path']), true);
+        foreach ($updatedIndexContent as $picturePath => $info) {
+            $this->assertEquals(0, $info['play_count'], "Play count should be reset to 0 for $picturePath");
+        }
+        
+        // Clean up
+        if (file_exists($result2['file_path'])) {
+            unlink($result2['file_path']);
+        }
+        if (file_exists($folderIndexResult['file_path'])) {
+            unlink($folderIndexResult['file_path']);
+        }
+    }
 }

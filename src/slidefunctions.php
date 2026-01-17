@@ -153,6 +153,12 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
 
     if (!isset($plitem['scan-sub-folders']) || $plitem['scan-sub-folders'] == false) {
         $photoFolder = $plitem['path'];
+        
+        // Create or update folder picture index
+        if ($playlistsIndexFile && $baseDir) {
+            createOrUpdateFolderPictureIndex($photoFolder, $photoExt, $baseDir);
+        }
+        
         return dirContentsGet($plitem['path'], '/\.' . $photoExt . '$/i');
     } else {
         // Load playlist folder index to get play counts
@@ -223,8 +229,103 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
             incrementPlaylistFolderCount($plitem, $photoFolder, $baseDir);
         }
         
+        // Create or update folder picture index for the selected folder
+        if ($playlistsIndexFile && $baseDir) {
+            createOrUpdateFolderPictureIndex($selectedFolder, $photoExt, $baseDir);
+        }
+        
         return dirContentsGet($selectedFolder, '/\.' . $photoExt . '$/i');
     }
+}
+
+function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir) {
+    // Get the folder's GUID from the playlist folder index
+    $folderGuid = getFolderGuid($folderPath, $baseDir);
+    if (!$folderGuid) {
+        // If no GUID found, we can't create a picture index
+        return null;
+    }
+    
+    $indexFileName = "folderpics-{$folderGuid}-index.json";
+    $indexFilePath = $baseDir . DIRECTORY_SEPARATOR . $indexFileName;
+    
+    // Get current pictures in the folder
+    $currentPictures = dirContentsGet($folderPath, '/\.' . $photoExt . '$/i');
+    
+    // Load existing index if it exists
+    $existingIndex = [];
+    if (file_exists($indexFilePath)) {
+        $indexData = file_get_contents($indexFilePath);
+        $existingIndex = json_decode($indexData, true);
+        if ($existingIndex === null) {
+            $existingIndex = [];
+        }
+    }
+    
+    // Check if folder contents have changed
+    $existingPictures = array_keys($existingIndex);
+    $addedPictures = array_diff($currentPictures, $existingPictures);
+    $removedPictures = array_diff($existingPictures, $currentPictures);
+    $hasChanges = !empty($addedPictures) || !empty($removedPictures);
+    
+    // If this is the first time creating the index, don't consider it as "changes"
+    $isFirstTime = empty($existingIndex);
+    if ($isFirstTime) {
+        $hasChanges = false;
+    }
+    
+    // Build updated index
+    $updatedIndex = [];
+    foreach ($currentPictures as $picture) {
+        if ($hasChanges) {
+            // If there are changes, reset all counts to 0
+            $updatedIndex[$picture] = ['play_count' => 0];
+        } else {
+            // No changes, preserve existing counts
+            $updatedIndex[$picture] = [
+                'play_count' => isset($existingIndex[$picture]) ? $existingIndex[$picture]['play_count'] : 0
+            ];
+        }
+    }
+    
+    // Save the updated index
+    file_put_contents($indexFilePath, json_encode($updatedIndex, JSON_PRETTY_PRINT));
+    
+    $logObj = [
+        'log' => 'folderPictureIndex',
+        'scanID' => $_SESSION['playlist-scanid'] ?? 'unknown',
+        'folder_path' => basename($folderPath),
+        'folder_guid' => $folderGuid,
+        'index_file' => $indexFileName,
+        'picture_count' => count($updatedIndex),
+        'changes_detected' => $hasChanges,
+        'added_pictures' => count($addedPictures),
+        'removed_pictures' => count($removedPictures)
+    ];
+    error_log(json_encode($logObj));
+    
+    return [
+        'file_path' => $indexFilePath,
+        'file_name' => $indexFileName,
+        'picture_count' => count($updatedIndex),
+        'changes_detected' => $hasChanges
+    ];
+}
+
+function getFolderGuid($folderPath, $baseDir) {
+    // Search through all playlist folder indexes to find the GUID for this folder
+    $indexFiles = glob($baseDir . DIRECTORY_SEPARATOR . 'playlist-*-index.json');
+    
+    foreach ($indexFiles as $indexFile) {
+        $indexData = file_get_contents($indexFile);
+        $index = json_decode($indexData, true);
+        
+        if ($index && isset($index[$folderPath]) && isset($index[$folderPath]['guid'])) {
+            return $index[$folderPath]['guid'];
+        }
+    }
+    
+    return null;
 }
 
 function getPlaylistFolders($playlist) {

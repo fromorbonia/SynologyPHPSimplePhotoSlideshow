@@ -4,6 +4,36 @@
 //    Primary logic for selecting and photo to display
 //**************************************************************
 
+function extractPhotoInfoAndFormatDisplayName($photoPath) {
+    // Get the DateTimeOriginal field from the photo EXIF data
+    $photoYear = '-';
+    $photoMonth = '-';
+    
+    if (function_exists('exif_read_data') && file_exists($photoPath)) {
+        // Suppress warnings and handle errors gracefully
+        $photoExif = @exif_read_data($photoPath, 'IFD0');
+        if (
+            (!empty($photoExif))
+            && (array_key_exists('DateTimeOriginal', $photoExif))
+        ) {
+            $photoYear = date("Y", strtotime($photoExif['DateTimeOriginal']));
+            $photoMonth = date("M", strtotime($photoExif['DateTimeOriginal']));
+        }
+    }
+
+    $plName = stringSplitLast($_SESSION['playlist-item']['path'], '/');
+    $fldName = stringSplitLast($_SESSION['photos-folder'], '/');
+    if (($fldName) && ($plName != $fldName)) {
+        $plName = $plName . ' - ' . $fldName;
+    }
+
+    return [
+        'year' => $photoYear,
+        'month' => $photoMonth,
+        'display_name' => $plName
+    ];
+}
+
 function selectAndDisplayPhoto($ExcludeText) {
     //Delete the currrent selected photo, which has already been removed from the list of photos
     unset($_SESSION['photo-current']);
@@ -20,31 +50,14 @@ function selectAndDisplayPhoto($ExcludeText) {
 
             if (file_exists($photo)) {
 
-                // Get the DateTimeOriginal field from the photo EXIF data
-                $photoExif = exif_read_data($_SESSION['photos'][$random], 'IFD0');
-                $photoYear = '-';
-                $photoMonth = '-';
-                if (
-                    (!empty($photoExif))
-                    && (array_key_exists('DateTimeOriginal', $photoExif))
-                ) {
-                    $photoYear = date("Y", strtotime($photoExif['DateTimeOriginal']));
-                    $photoMonth = date("M", strtotime($photoExif['DateTimeOriginal']));
-                }
-
-                $plName = stringSplitLast($_SESSION['playlist-item']['path'], '/');
-                $fldName = stringSplitLast($_SESSION['photos-folder'], '/');
-                if (($fldName) && ($plName != $fldName)) {
-                    $plName = $plName . ' - ' . $fldName;
-                }
-
+                $photoInfo = extractPhotoInfoAndFormatDisplayName($_SESSION['photos'][$random]);
 
                 //Set the current photo for image.php to display
                 $_SESSION['photo-current'] = $photo;
 
                 // Display the filename of the photo and DateTimeOriginal
-                echo ("<h2 class=\"ellipsis\">Year: " . $photoYear . "&nbsp;&nbsp;&nbsp; Month: " . $photoMonth . "&nbsp;&nbsp;&nbsp;" .
-                    $plName . "</h2>");
+                echo ("<h2 class=\"ellipsis\">Year: " . $photoInfo['year'] . "&nbsp;&nbsp;&nbsp; Month: " . $photoInfo['month'] . "&nbsp;&nbsp;&nbsp;" .
+                    $photoInfo['display_name'] . "</h2>");
                 
                 $_SESSION['photos-displayed-count'] += 1;
 
