@@ -4,6 +4,73 @@
 //    Primary logic for selecting and photo to display
 //**************************************************************
 
+function selectAndDisplayPhoto($ExcludeText) {
+    //Delete the currrent selected photo, which has already been removed from the list of photos
+    unset($_SESSION['photo-current']);
+
+    // Select a random photo if the filename does not contain $excludeText
+    $photosCount = count($_SESSION['photos']);
+
+    while ($photosCount > 0){
+        $random = array_rand($_SESSION['photos'], 1);
+
+        $photo = $_SESSION['photos'][$random];
+
+        if (stripos($photo, $ExcludeText) <= 0) {
+
+            if (file_exists($photo)) {
+
+                // Get the DateTimeOriginal field from the photo EXIF data
+                $photoExif = exif_read_data($_SESSION['photos'][$random], 'IFD0');
+                $photoYear = '-';
+                $photoMonth = '-';
+                if (
+                    (!empty($photoExif))
+                    && (array_key_exists('DateTimeOriginal', $photoExif))
+                ) {
+                    $photoYear = date("Y", strtotime($photoExif['DateTimeOriginal']));
+                    $photoMonth = date("M", strtotime($photoExif['DateTimeOriginal']));
+                }
+
+                $plName = stringSplitLast($_SESSION['playlist-item']['path'], '/');
+                $fldName = stringSplitLast($_SESSION['photos-folder'], '/');
+                if (($fldName) && ($plName != $fldName)) {
+                    $plName = $plName . ' - ' . $fldName;
+                }
+
+
+                //Set the current photo for image.php to display
+                $_SESSION['photo-current'] = $photo;
+
+                // Display the filename of the photo and DateTimeOriginal
+                echo ("<h2 class=\"ellipsis\">Year: " . $photoYear . "&nbsp;&nbsp;&nbsp; Month: " . $photoMonth . "&nbsp;&nbsp;&nbsp;" .
+                    $plName . "</h2>");
+                
+                $_SESSION['photos-displayed-count'] += 1;
+
+                if ((isset($_SESSION['playlist-item']['max-photos-per-select']))
+                    && ($_SESSION['photos-displayed-count']>= $_SESSION['playlist-item']['max-photos-per-select']))
+                {
+                    //Exceeded the maximum number of photos for this cycle, so clear list 
+                    unset($_SESSION['photos']);
+                }
+                    
+                break;
+            } else {
+                error_log('Photo found in initial scan, but file does not exist = ' . $photo);
+            }
+        }
+
+        if (!empty($_SESSION['photos']))
+        {
+            //No matter what, remove the photo from the array, ready to get the next one
+            unset($_SESSION['photos'][$random]);
+        }
+
+        $photosCount -= 1;
+    }
+}
+
 function PrepAndSelect($PlaylistMap,
     $Playlist,
     $PlaylistRoot,
@@ -65,71 +132,7 @@ function PrepAndSelect($PlaylistMap,
             }
 
             if ($sessionRestart != true) {
-        
-                //Delete the currrent selected photo, which has already been removed from the list of photos
-                unset($_SESSION['photo-current']);
-            
-                // Select a random photo if the filename does not contain $excludeText
-                $photosCount = count($_SESSION['photos']);
-            
-                while ($photosCount > 0){
-                    $random = array_rand($_SESSION['photos'], 1);
-            
-                    $photo = $_SESSION['photos'][$random];
-            
-                    if (stripos($photo, $ExcludeText) <= 0) {
-            
-                        if (file_exists($photo)) {
-            
-                            // Get the DateTimeOriginal field from the photo EXIF data
-                            $photoExif = exif_read_data($_SESSION['photos'][$random], 'IFD0');
-                            $photoYear = '-';
-                            $photoMonth = '-';
-                            if (
-                                (!empty($photoExif))
-                                && (array_key_exists('DateTimeOriginal', $photoExif))
-                            ) {
-                                $photoYear = date("Y", strtotime($photoExif['DateTimeOriginal']));
-                                $photoMonth = date("M", strtotime($photoExif['DateTimeOriginal']));
-                            }
-            
-                            $plName = stringSplitLast($_SESSION['playlist-item']['path'], '/');
-                            $fldName = stringSplitLast($_SESSION['photos-folder'], '/');
-                            if (($fldName) && ($plName != $fldName)) {
-                                $plName = $plName . ' - ' . $fldName;
-                            }
-
-
-                            //Set the current photo for image.php to display
-                            $_SESSION['photo-current'] = $photo;
-            
-                            // Display the filename of the photo and DateTimeOriginal
-                            echo ("<h2 class=\"ellipsis\">Year: " . $photoYear . "&nbsp;&nbsp;&nbsp; Month: " . $photoMonth . "&nbsp;&nbsp;&nbsp;" .
-                                $plName . "</h2>");
-                            
-                            $_SESSION['photos-displayed-count'] += 1;
-            
-                            if ((isset($_SESSION['playlist-item']['max-photos-per-select']))
-                                && ($_SESSION['photos-displayed-count']>= $_SESSION['playlist-item']['max-photos-per-select']))
-                            {
-                                //Exceeded the maximum number of photos for this cycle, so clear list 
-                                unset($_SESSION['photos']);
-                            }
-                                
-                            break;
-                        } else {
-                            error_log('Photo found in initial scan, but file does not exist = ' . $photo);
-                        }
-                    }
-            
-                    if (!empty($_SESSION['photos']))
-                    {
-                        //No matter what, remove the photo from the array, ready to get the next one
-                        unset($_SESSION['photos'][$random]);
-                    }
-
-                    $photosCount -= 1;
-                }
+                selectAndDisplayPhoto($ExcludeText);
             }
         
         }
