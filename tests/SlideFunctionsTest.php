@@ -59,7 +59,8 @@ class SlideFunctionsTest extends TestCase
 
     public function testConfigGet()
     {
-        $result = configGet($this->testConfigFile);
+        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        $result = configGet($this->testConfigFile, $playlistsIndexFile);
         
         $this->assertIsArray($result);
         $this->assertArrayHasKey('photoExt', $result);
@@ -70,10 +71,12 @@ class SlideFunctionsTest extends TestCase
 
     public function testConfigGetReturnsNullForInvalidJson()
     {
+        // Create an invalid JSON file
         $invalidFile = $this->testDir . DIRECTORY_SEPARATOR . 'invalid.json';
         file_put_contents($invalidFile, '{invalid json}');
         
-        $result = configGet($invalidFile);
+        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        $result = configGet($invalidFile, $playlistsIndexFile);
         
         $this->assertNull($result);
     }
@@ -89,7 +92,8 @@ class SlideFunctionsTest extends TestCase
             ['name' => 'Playlist 2', 'path' => '/path/2']
         ];
         
-        $result = playlistPick($playlistMap, $playlist);
+        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        $result = playlistPick($playlistMap, $playlist, $playlistsIndexFile);
         
         $this->assertIsArray($result);
         $this->assertArrayHasKey('name', $result);
@@ -109,8 +113,9 @@ class SlideFunctionsTest extends TestCase
         ];
         
         $results = [];
+        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         for ($i = 0; $i < 20; $i++) {
-            $result = playlistPick($playlistMap, $playlist);
+            $result = playlistPick($playlistMap, $playlist, $playlistsIndexFile);
             $results[] = $result['id'];
         }
         
@@ -366,19 +371,19 @@ class SlideFunctionsTest extends TestCase
         ];
         
         $configFile = $this->testDir . DIRECTORY_SEPARATOR . 'test_config.json';
-        $indexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlist_index.json';
+        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         
         file_put_contents($configFile, json_encode($testConfig));
         
         // First call should create index file
-        $result = configGet($configFile);
+        $result = configGet($configFile, $playlistsIndexFile);
         
         $this->assertNotNull($result);
-        $this->assertArrayHasKey('playlist_index', $result);
-        $this->assertTrue(file_exists($indexFile));
+        $this->assertArrayHasKey('playlists_index', $result);
+        $this->assertTrue(file_exists($playlistsIndexFile));
         
         // Verify index structure
-        $index = $result['playlist_index'];
+        $index = $result['playlists_index'];
         $this->assertCount(3, $index);
         
         $this->assertArrayHasKey('/test/path1', $index);
@@ -390,23 +395,23 @@ class SlideFunctionsTest extends TestCase
         $this->assertEquals(0, $index['/test/path2']['play_count']);
         
         // Clean up
-        if (file_exists($indexFile)) {
-            unlink($indexFile);
+        if (file_exists($playlistsIndexFile)) {
+            unlink($playlistsIndexFile);
         }
     }
 
     public function testConfigGetUpdatesExistingIndex()
     {
         $configFile = $this->testDir . DIRECTORY_SEPARATOR . 'test_config.json';
-        $indexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlist_index.json';
+        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         
         // Create existing index with play counts
         $existingIndex = [
-            '/test/path1' => ['name' => 'Old Playlist 1', 'path' => '/test/path1', 'play_count' => 5],
-            '/test/path2' => ['name' => 'Old Playlist 2', 'path' => '/test/path2', 'play_count' => 3],
-            '/test/old_path' => ['name' => 'Removed Playlist', 'path' => '/test/old_path', 'play_count' => 10]
+            '/test/path1' => ['name' => 'Old Playlist 1', 'root_path' => '/test/path1', 'play_count' => 5],
+            '/test/path2' => ['name' => 'Old Playlist 2', 'root_path' => '/test/path2', 'play_count' => 3],
+            '/test/old_path' => ['name' => 'Removed Playlist', 'root_path' => '/test/old_path', 'play_count' => 10]
         ];
-        file_put_contents($indexFile, json_encode($existingIndex));
+        file_put_contents($playlistsIndexFile, json_encode($existingIndex));
         
         // Create new config (path1 stays, path2 removed, path3 added)
         $testConfig = [
@@ -418,12 +423,12 @@ class SlideFunctionsTest extends TestCase
         ];
         file_put_contents($configFile, json_encode($testConfig));
         
-        $result = configGet($configFile);
+        $result = configGet($configFile, $playlistsIndexFile);
         
         $this->assertNotNull($result);
-        $this->assertArrayHasKey('playlist_index', $result);
+        $this->assertArrayHasKey('playlists_index', $result);
         
-        $index = $result['playlist_index'];
+        $index = $result['playlists_index'];
         $this->assertCount(2, $index);
         
         // Existing playlist should keep its play count
@@ -439,41 +444,41 @@ class SlideFunctionsTest extends TestCase
         $this->assertArrayNotHasKey('/test/path2', $index);
         
         // Clean up
-        if (file_exists($indexFile)) {
-            unlink($indexFile);
+        if (file_exists($playlistsIndexFile)) {
+            unlink($playlistsIndexFile);
         }
     }
 
     public function testPlaylistIncrementPlayCount()
     {
         $configFile = $this->testDir . DIRECTORY_SEPARATOR . 'test_config.json';
-        $indexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlist_index.json';
+        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         
         // Create initial index
         $initialIndex = [
-            '/test/path1' => ['name' => 'Test Playlist 1', 'path' => '/test/path1', 'play_count' => 0],
-            '/test/path2' => ['name' => 'Test Playlist 2', 'path' => '/test/path2', 'play_count' => 5]
+            '/test/path1' => ['name' => 'Test Playlist 1', 'root_path' => '/test/path1', 'play_count' => 0],
+            '/test/path2' => ['name' => 'Test Playlist 2', 'root_path' => '/test/path2', 'play_count' => 5]
         ];
-        file_put_contents($indexFile, json_encode($initialIndex));
+        file_put_contents($playlistsIndexFile, json_encode($initialIndex));
         
         // Test incrementing play count
-        playlistIncrementPlayCount('/test/path1', $configFile);
+        playlistIncrementPlayCount('/test/path1', $playlistsIndexFile);
         
-        $updatedIndex = json_decode(file_get_contents($indexFile), true);
+        $updatedIndex = json_decode(file_get_contents($playlistsIndexFile), true);
         $this->assertEquals(1, $updatedIndex['/test/path1']['play_count']);
         $this->assertEquals(5, $updatedIndex['/test/path2']['play_count']); // Unchanged
         
         // Test incrementing again
-        playlistIncrementPlayCount('/test/path1', $configFile);
-        playlistIncrementPlayCount('/test/path2', $configFile);
+        playlistIncrementPlayCount('/test/path1', $playlistsIndexFile);
+        playlistIncrementPlayCount('/test/path2', $playlistsIndexFile);
         
-        $updatedIndex = json_decode(file_get_contents($indexFile), true);
+        $updatedIndex = json_decode(file_get_contents($playlistsIndexFile), true);
         $this->assertEquals(2, $updatedIndex['/test/path1']['play_count']);
         $this->assertEquals(6, $updatedIndex['/test/path2']['play_count']);
         
         // Clean up
-        if (file_exists($indexFile)) {
-            unlink($indexFile);
+        if (file_exists($playlistsIndexFile)) {
+            unlink($playlistsIndexFile);
         }
     }
 }

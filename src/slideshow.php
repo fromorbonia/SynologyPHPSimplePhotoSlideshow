@@ -6,8 +6,10 @@ require_once 'slidefunctions.php';
 // Session variables are used to prevent rescaning photo folders every time the page is refreshed.
 session_start();
 
+// Configure playlists index file path
+$playlistsIndexFile = __DIR__ . DIRECTORY_SEPARATOR . 'playlists_index.json';
 
-$config = configGet('slideconfig.json');
+$config = configGet('slideconfig.json', $playlistsIndexFile);
 
 // Background and text colors
 $backgroundColor = $config['display']['backgroundColor'];

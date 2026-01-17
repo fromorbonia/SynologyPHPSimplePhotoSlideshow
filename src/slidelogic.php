@@ -15,7 +15,8 @@ function PrepAndSelect($PlaylistMap,
         if(empty($_SESSION['playlist-item'])){
             //No current folder active, so choose one at random:
             //var_dump($PlaylistMap);
-            $_SESSION['playlist-item'] = playlistPick($PlaylistMap, $Playlist);
+            global $playlistsIndexFile;
+            $_SESSION['playlist-item'] = playlistPick($PlaylistMap, $Playlist, $playlistsIndexFile);
             //var_dump($_SESSION['playlist-item']);
             $_SESSION['photos'] = null;
         }

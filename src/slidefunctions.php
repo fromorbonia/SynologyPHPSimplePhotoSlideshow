@@ -5,7 +5,7 @@
 //**************************************************************
 
 
-function configGet ($configFile) {
+function configGet ($configFile, $playlistsIndexFile) {
     $config_data = file_get_contents($configFile);
     $config = json_decode($config_data, true);
     
@@ -13,14 +13,10 @@ function configGet ($configFile) {
         return null;
     }
     
-    // Get the directory path of the config file
-    $configDir = dirname($configFile);
-    $indexFile = $configDir . DIRECTORY_SEPARATOR . 'playlist_index.json';
-    
-    // Load or create the playlist index
+    // Load or create the playlists index
     $index = [];
-    if (file_exists($indexFile)) {
-        $indexData = file_get_contents($indexFile);
+    if (file_exists($playlistsIndexFile)) {
+        $indexData = file_get_contents($playlistsIndexFile);
         $index = json_decode($indexData, true);
         if ($index === null) {
             $index = [];
@@ -47,31 +43,28 @@ function configGet ($configFile) {
     foreach ($currentPlaylists as $playlistId => $playlistInfo) {
         $updatedIndex[$playlistId] = [
             'name' => $playlistInfo['name'],
-            'path' => $playlistInfo['path'],
+            'root_path' => $playlistInfo['path'],
             'play_count' => isset($index[$playlistId]) ? $index[$playlistId]['play_count'] : 0
         ];
     }
     
     // Save the updated index back to file
-    file_put_contents($indexFile, json_encode($updatedIndex, JSON_PRETTY_PRINT));
+    file_put_contents($playlistsIndexFile, json_encode($updatedIndex, JSON_PRETTY_PRINT));
     
     // Add the index to the config for use by other parts of the application
-    $config['playlist_index'] = $updatedIndex;
+    $config['playlists_index'] = $updatedIndex;
     
     return $config;
 }
 
-function playlistIncrementPlayCount($playlistPath, $configFile = 'slideconfig.json') {
-    $configDir = dirname($configFile);
-    $indexFile = $configDir . DIRECTORY_SEPARATOR . 'playlist_index.json';
-    
-    if (file_exists($indexFile)) {
-        $indexData = file_get_contents($indexFile);
+function playlistIncrementPlayCount($playlistPath, $playlistsIndexFile) {
+    if (file_exists($playlistsIndexFile)) {
+        $indexData = file_get_contents($playlistsIndexFile);
         $index = json_decode($indexData, true);
         
         if ($index && isset($index[$playlistPath])) {
             $index[$playlistPath]['play_count']++;
-            file_put_contents($indexFile, json_encode($index, JSON_PRETTY_PRINT));
+            file_put_contents($playlistsIndexFile, json_encode($index, JSON_PRETTY_PRINT));
             
             $logObj = [ 'log' => 'playCountIncrement',
                 'scanID' => $_SESSION['playlist-scanid'] ?? 'unknown', 
@@ -82,7 +75,7 @@ function playlistIncrementPlayCount($playlistPath, $configFile = 'slideconfig.js
     }
 }
 
-function playlistPick ($PlaylistMap, $Playlist) {
+function playlistPick ($PlaylistMap, $Playlist, $playlistsIndexFile) {
     $total = count($PlaylistMap);
     $rd = random_int(0, $total-1);
     $val = array_values($PlaylistMap)[$rd];
@@ -91,7 +84,7 @@ function playlistPick ($PlaylistMap, $Playlist) {
     
     // Increment play count for the selected playlist
     if (isset($selectedPlaylist['path'])) {
-        playlistIncrementPlayCount($selectedPlaylist['path']);
+        playlistIncrementPlayCount($selectedPlaylist['path'], $playlistsIndexFile);
     }
     
     $logObj = [ 'log' => 'playlistPick',
