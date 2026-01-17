@@ -12,7 +12,8 @@ $playlistsIndexFile = __DIR__ . DIRECTORY_SEPARATOR . 'playlists_index.json';
 // Make it available globally for other functions
 $GLOBALS['playlistsIndexFile'] = $playlistsIndexFile;
 
-$config = configGet('slideconfig.json', $playlistsIndexFile);
+// Load config with caching functionality
+$config = loadConfigWithCaching('slideconfig.json', $playlistsIndexFile);
 
 // Background and text colors
 $backgroundColor = $config['display']['backgroundColor'];

@@ -593,4 +593,107 @@ class SlideFunctionsTest extends TestCase
             unlink($result['file_path']);
         }
     }
+
+    public function testConfigFileCaching()
+    {
+        // Simulate config file caching behavior
+        $testConfigFile = $this->testDir . DIRECTORY_SEPARATOR . 'test_config_cache.json';
+        $testConfig = [
+            'display' => ['interval' => 30],
+            'playlist' => [
+                ['name' => 'Cache Test', 'path' => '/test/cache', 'scan-sub-folders' => false]
+            ]
+        ];
+        
+        // Create initial config file
+        file_put_contents($testConfigFile, json_encode($testConfig));
+        $initialMtime = filemtime($testConfigFile);
+        
+        // Simulate session state for caching test
+        $_SESSION['config'] = null;
+        $_SESSION['config_file_mtime'] = null;
+        
+        // First load should set the cache
+        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'cache_test_index.json';
+        
+        // Verify file modification time can be retrieved
+        $this->assertNotFalse($initialMtime);
+        $this->assertTrue($initialMtime > 0);
+        
+        // Simulate a file modification by changing content and updating mtime
+        sleep(1); // Ensure different timestamp
+        $modifiedConfig = $testConfig;
+        $modifiedConfig['display']['interval'] = 45;
+        file_put_contents($testConfigFile, json_encode($modifiedConfig));
+        $modifiedMtime = filemtime($testConfigFile);
+        
+        // Verify the modification time changed
+        $this->assertNotEquals($initialMtime, $modifiedMtime);
+        $this->assertGreaterThan($initialMtime, $modifiedMtime);
+        
+        // Clean up
+        if (file_exists($testConfigFile)) {
+            unlink($testConfigFile);
+        }
+        if (file_exists($playlistsIndexFile)) {
+            unlink($playlistsIndexFile);
+        }
+    }
+
+    public function testLoadConfigWithCaching()
+    {
+        $testConfigFile = $this->testDir . DIRECTORY_SEPARATOR . 'cache_test.json';
+        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'cache_playlists_index.json';
+        
+        $testConfig = [
+            'display' => ['interval' => 60],
+            'playlist' => [
+                ['name' => 'Cache Test', 'path' => '/test/cache', 'scan-sub-folders' => false]
+            ]
+        ];
+        
+        file_put_contents($testConfigFile, json_encode($testConfig));
+        
+        // Clear session to simulate new session
+        unset($_SESSION['config']);
+        unset($_SESSION['config_file_mtime']);
+        
+        // First call should load and cache config (new session)
+        $config1 = loadConfigWithCaching($testConfigFile, $playlistsIndexFile);
+        $this->assertNotNull($config1);
+        $this->assertArrayHasKey('display', $config1);
+        $this->assertEquals(60, $config1['display']['interval']);
+        
+        // Verify session variables are set
+        $this->assertArrayHasKey('config', $_SESSION);
+        $this->assertArrayHasKey('config_file_mtime', $_SESSION);
+        
+        // Second call should use cached version (no file modification)
+        $config2 = loadConfigWithCaching($testConfigFile, $playlistsIndexFile);
+        $this->assertEquals($config1, $config2);
+        
+        // Modify file and test reload detection
+        sleep(1); // Ensure different mtime
+        $modifiedConfig = $testConfig;
+        $modifiedConfig['display']['interval'] = 90;
+        file_put_contents($testConfigFile, json_encode($modifiedConfig));
+        
+        $config3 = loadConfigWithCaching($testConfigFile, $playlistsIndexFile);
+        $this->assertNotNull($config3);
+        $this->assertEquals(90, $config3['display']['interval']);
+        
+        // Clean up
+        if (file_exists($testConfigFile)) {
+            unlink($testConfigFile);
+        }
+        if (file_exists($playlistsIndexFile)) {
+            unlink($playlistsIndexFile);
+        }
+        
+        // Clean up any created playlist index files
+        $files = glob($this->testDir . DIRECTORY_SEPARATOR . 'playlist-*.json');
+        foreach ($files as $file) {
+            unlink($file);
+        }
+    }
 }

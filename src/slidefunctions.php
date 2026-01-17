@@ -5,6 +5,45 @@
 //**************************************************************
 
 
+function loadConfigWithCaching($configFile, $playlistsIndexFile) {
+    $needsReload = false;
+    
+    // Check if this is a new session (no config cached)
+    if (!isset($_SESSION['config']) || !isset($_SESSION['config_file_mtime'])) {
+        $needsReload = true;
+        $logReason = 'new_session';
+    } else {
+        // Check if config file has been modified since last load
+        $currentMtime = filemtime($configFile);
+        if ($currentMtime !== $_SESSION['config_file_mtime']) {
+            $needsReload = true;
+            $logReason = 'file_modified';
+        }
+    }
+    
+    // Load config only if needed
+    if ($needsReload) {
+        $config = configGet($configFile, $playlistsIndexFile);
+        
+        // Cache the config and file modification time in session
+        $_SESSION['config'] = $config;
+        $_SESSION['config_file_mtime'] = filemtime($configFile);
+        
+        $logObj = [
+            'log' => 'configReload',
+            'reason' => $logReason,
+            'mtime' => $_SESSION['config_file_mtime'],
+            'scanID' => $_SESSION['playlist-scanid'] ?? 'unknown'
+        ];
+        error_log(json_encode($logObj));
+    } else {
+        // Use cached config
+        $config = $_SESSION['config'];
+    }
+    
+    return $config;
+}
+
 function configGet ($configFile, $playlistsIndexFile) {
     $config_data = file_get_contents($configFile);
     $config = json_decode($config_data, true);
