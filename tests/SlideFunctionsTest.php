@@ -364,9 +364,9 @@ class SlideFunctionsTest extends TestCase
         $testConfig = [
             'display' => ['interval' => 60],
             'playlist' => [
-                ['name' => 'Test Playlist 1', 'path' => '/test/path1'],
-                ['path' => '/test/path2'], // No name provided
-                ['name' => 'Test Playlist 3', 'path' => '/test/path3']
+                ['name' => 'Test Playlist 1', 'path' => '/test/path1', 'scan-sub-folders' => false],
+                ['path' => '/test/path2', 'scan-sub-folders' => false], // No name provided
+                ['name' => 'Test Playlist 3', 'path' => '/test/path3', 'scan-sub-folders' => true]
             ]
         ];
         
@@ -417,8 +417,8 @@ class SlideFunctionsTest extends TestCase
         $testConfig = [
             'display' => ['interval' => 60],
             'playlist' => [
-                ['name' => 'Updated Playlist 1', 'path' => '/test/path1'],
-                ['name' => 'New Playlist 3', 'path' => '/test/path3']
+                ['name' => 'Updated Playlist 1', 'path' => '/test/path1', 'scan-sub-folders' => false],
+                ['name' => 'New Playlist 3', 'path' => '/test/path3', 'scan-sub-folders' => true]
             ]
         ];
         file_put_contents($configFile, json_encode($testConfig));
@@ -479,6 +479,118 @@ class SlideFunctionsTest extends TestCase
         // Clean up
         if (file_exists($playlistsIndexFile)) {
             unlink($playlistsIndexFile);
+        }
+    }
+
+    public function testSanitizePlaylistName()
+    {
+        $this->assertEquals('My_Playlist', sanitizePlaylistName('My Playlist'));
+        $this->assertEquals('Test_123', sanitizePlaylistName('Test@123!'));
+        $this->assertEquals('Multiple_Spaces', sanitizePlaylistName('Multiple   Spaces'));
+        $this->assertEquals('Special_Chars', sanitizePlaylistName('Special!@#$%^&*()Chars'));
+        $this->assertEquals('normal-name', sanitizePlaylistName('normal-name'));
+    }
+
+    public function testGetPlaylistFolders()
+    {
+        // Create test directory structure
+        $subDir1 = $this->testDir . DIRECTORY_SEPARATOR . 'sub1';
+        $subDir2 = $this->testDir . DIRECTORY_SEPARATOR . 'sub2';
+        mkdir($subDir1, 0777, true);
+        mkdir($subDir2, 0777, true);
+        
+        // Test with scan-sub-folders enabled
+        $playlist1 = [
+            'path' => $this->testDir,
+            'scan-sub-folders' => true
+        ];
+        
+        $folders1 = getPlaylistFolders($playlist1);
+        $this->assertIsArray($folders1);
+        $this->assertGreaterThan(0, count($folders1));
+        
+        // Test with scan-sub-folders disabled
+        $playlist2 = [
+            'path' => $this->testDir,
+            'scan-sub-folders' => false
+        ];
+        
+        $folders2 = getPlaylistFolders($playlist2);
+        $this->assertIsArray($folders2);
+        $this->assertCount(1, $folders2);
+        $this->assertEquals($this->testDir, $folders2[0]);
+    }
+
+    public function testCreateOrUpdatePlaylistFolderIndex()
+    {
+        // Create test directory structure
+        $subDir1 = $this->testDir . DIRECTORY_SEPARATOR . 'sub1';
+        mkdir($subDir1, 0777, true);
+        
+        $_SESSION['playlist-scanid'] = 'test-scan-folder';
+        
+        $playlist = [
+            'name' => 'Test Playlist',
+            'path' => $this->testDir,
+            'scan-sub-folders' => true
+        ];
+        
+        $result = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('file_path', $result);
+        $this->assertArrayHasKey('file_name', $result);
+        $this->assertArrayHasKey('folder_count', $result);
+        
+        $this->assertEquals('playlist-Test_Playlist-index.json', $result['file_name']);
+        $this->assertTrue(file_exists($result['file_path']));
+        
+        // Verify file content
+        $indexContent = json_decode(file_get_contents($result['file_path']), true);
+        $this->assertIsArray($indexContent);
+        $this->assertGreaterThan(0, count($indexContent));
+        
+        // Each entry should have play_count
+        foreach ($indexContent as $folder => $info) {
+            $this->assertArrayHasKey('play_count', $info);
+            $this->assertEquals(0, $info['play_count']);
+        }
+        
+        // Clean up
+        if (file_exists($result['file_path'])) {
+            unlink($result['file_path']);
+        }
+    }
+
+    public function testIncrementPlaylistFolderCount()
+    {
+        $playlist = [
+            'name' => 'Test Increment',
+            'path' => $this->testDir,
+            'scan-sub-folders' => false
+        ];
+        
+        $_SESSION['playlist-scanid'] = 'test-scan-increment';
+        
+        // First create the index
+        $result = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        
+        // Then increment the count
+        incrementPlaylistFolderCount($playlist, $this->testDir, $this->testDir);
+        
+        // Verify the count was incremented
+        $indexContent = json_decode(file_get_contents($result['file_path']), true);
+        $this->assertEquals(1, $indexContent[$this->testDir]['play_count']);
+        
+        // Increment again
+        incrementPlaylistFolderCount($playlist, $this->testDir, $this->testDir);
+        
+        $indexContent = json_decode(file_get_contents($result['file_path']), true);
+        $this->assertEquals(2, $indexContent[$this->testDir]['play_count']);
+        
+        // Clean up
+        if (file_exists($result['file_path'])) {
+            unlink($result['file_path']);
         }
     }
 }

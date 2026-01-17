@@ -9,6 +9,9 @@ session_start();
 // Configure playlists index file path
 $playlistsIndexFile = __DIR__ . DIRECTORY_SEPARATOR . 'playlists_index.json';
 
+// Make it available globally for other functions
+$GLOBALS['playlistsIndexFile'] = $playlistsIndexFile;
+
 $config = configGet('slideconfig.json', $playlistsIndexFile);
 
 // Background and text colors

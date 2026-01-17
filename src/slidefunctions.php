@@ -51,8 +51,19 @@ function configGet ($configFile, $playlistsIndexFile) {
     // Save the updated index back to file
     file_put_contents($playlistsIndexFile, json_encode($updatedIndex, JSON_PRETTY_PRINT));
     
+    // Create or update individual playlist folder indices
+    $baseDir = dirname($playlistsIndexFile);
+    $playlistFolderIndices = [];
+    if (isset($config['playlist']) && is_array($config['playlist'])) {
+        foreach ($config['playlist'] as $index => $playlist) {
+            $folderIndexInfo = createOrUpdatePlaylistFolderIndex($playlist, $index, $baseDir);
+            $playlistFolderIndices[$index] = $folderIndexInfo;
+        }
+    }
+    
     // Add the index to the config for use by other parts of the application
     $config['playlists_index'] = $updatedIndex;
+    $config['playlist_folder_indices'] = $playlistFolderIndices;
     
     return $config;
 }
@@ -101,14 +112,129 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
 
     if ($plitem['scan-sub-folders'] == false) {
         $photoFolder = $plitem['path'];
+        
+        // Increment folder play count
+        global $playlistsIndexFile;
+        if ($playlistsIndexFile) {
+            $baseDir = dirname($playlistsIndexFile);
+            incrementPlaylistFolderCount($plitem, $photoFolder, $baseDir);
+        }
+        
         return dirContentsGet($plitem['path'], '/\.' . $photoExt . '$/i');
     } else {
         $dirs = dirSubFoldersGet($plitem['path']);
         $dirKey = array_keys($dirs)[random_int(0, count($dirs)-1)];
         $retPhotos = dirContentsGet($dirs[$dirKey], '/\.' . $photoExt . '$/i');
         $photoFolder = $dirs[$dirKey];
+        
+        // Increment folder play count
+        global $playlistsIndexFile;
+        if ($playlistsIndexFile) {
+            $baseDir = dirname($playlistsIndexFile);
+            incrementPlaylistFolderCount($plitem, $photoFolder, $baseDir);
+        }
+        
         return $retPhotos;
     }
+}
+
+function getPlaylistFolders($playlist) {
+    $folders = [];
+    
+    if (isset($playlist['scan-sub-folders']) && $playlist['scan-sub-folders']) {
+        $subFolders = [];
+        dirSubFoldersGet($playlist['path'], $subFolders, true);
+        $folders = $subFolders;
+    } else {
+        // For non-sub-folder scanning, the playlist path itself is the only "folder"
+        $folders = [$playlist['path']];
+    }
+    
+    return $folders;
+}
+
+function createOrUpdatePlaylistFolderIndex($playlist, $playlistIndex, $baseDir) {
+    // Generate sanitized playlist name
+    $playlistName = isset($playlist['name']) ? $playlist['name'] : basename($playlist['path']);
+    $sanitizedName = sanitizePlaylistName($playlistName);
+    $indexFileName = "playlist-{$sanitizedName}-index.json";
+    $indexFilePath = $baseDir . DIRECTORY_SEPARATOR . $indexFileName;
+    
+    // Get current folders for this playlist
+    $currentFolders = getPlaylistFolders($playlist);
+    
+    // Load existing index if it exists
+    $existingIndex = [];
+    if (file_exists($indexFilePath)) {
+        $indexData = file_get_contents($indexFilePath);
+        $existingIndex = json_decode($indexData, true);
+        if ($existingIndex === null) {
+            $existingIndex = [];
+        }
+    }
+    
+    // Build updated index
+    $updatedIndex = [];
+    foreach ($currentFolders as $folder) {
+        $updatedIndex[$folder] = [
+            'play_count' => isset($existingIndex[$folder]) ? $existingIndex[$folder]['play_count'] : 0
+        ];
+    }
+    
+    // Save the updated index
+    file_put_contents($indexFilePath, json_encode($updatedIndex, JSON_PRETTY_PRINT));
+    
+    $logObj = [
+        'log' => 'playlistFolderIndex',
+        'scanID' => $_SESSION['playlist-scanid'] ?? 'unknown',
+        'playlist_name' => $playlistName,
+        'index_file' => $indexFileName,
+        'folder_count' => count($updatedIndex)
+    ];
+    error_log(json_encode($logObj));
+    
+    return [
+        'file_path' => $indexFilePath,
+        'file_name' => $indexFileName,
+        'folder_count' => count($updatedIndex)
+    ];
+}
+
+function incrementPlaylistFolderCount($playlist, $folderPath, $baseDir) {
+    // Generate sanitized playlist name and index file path
+    $playlistName = isset($playlist['name']) ? $playlist['name'] : basename($playlist['path']);
+    $sanitizedName = sanitizePlaylistName($playlistName);
+    $indexFileName = "playlist-{$sanitizedName}-index.json";
+    $indexFilePath = $baseDir . DIRECTORY_SEPARATOR . $indexFileName;
+    
+    if (file_exists($indexFilePath)) {
+        $indexData = file_get_contents($indexFilePath);
+        $index = json_decode($indexData, true);
+        
+        if ($index && isset($index[$folderPath])) {
+            $index[$folderPath]['play_count']++;
+            file_put_contents($indexFilePath, json_encode($index, JSON_PRETTY_PRINT));
+            
+            $logObj = [
+                'log' => 'folderPlayCountIncrement',
+                'scanID' => $_SESSION['playlist-scanid'] ?? 'unknown',
+                'playlist_name' => $playlistName,
+                'folder_path' => $folderPath,
+                'new_count' => $index[$folderPath]['play_count']
+            ];
+            error_log(json_encode($logObj));
+        }
+    }
+}
+
+function sanitizePlaylistName($name) {
+    // Remove or replace characters that are not safe for filenames (preserve hyphens and underscores)
+    $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '_', $name);
+    // Remove multiple consecutive underscores
+    $sanitized = preg_replace('/_+/', '_', $sanitized);
+    // Remove leading/trailing underscores
+    $sanitized = trim($sanitized, '_');
+    return $sanitized;
 }
 
 function playlistScanBuild ($Playlist) {
