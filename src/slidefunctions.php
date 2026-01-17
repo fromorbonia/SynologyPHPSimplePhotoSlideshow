@@ -148,32 +148,82 @@ function playlistPick ($PlaylistMap, $Playlist, $playlistsIndexFile) {
 
 function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
 {
+    global $playlistsIndexFile;
+    $baseDir = $playlistsIndexFile ? dirname($playlistsIndexFile) : '';
 
-    if ($plitem['scan-sub-folders'] == false) {
+    if (!isset($plitem['scan-sub-folders']) || $plitem['scan-sub-folders'] == false) {
         $photoFolder = $plitem['path'];
-        
-        // Increment folder play count
-        global $playlistsIndexFile;
-        if ($playlistsIndexFile) {
-            $baseDir = dirname($playlistsIndexFile);
-            incrementPlaylistFolderCount($plitem, $photoFolder, $baseDir);
-        }
-        
         return dirContentsGet($plitem['path'], '/\.' . $photoExt . '$/i');
     } else {
-        $dirs = dirSubFoldersGet($plitem['path']);
-        $dirKey = array_keys($dirs)[random_int(0, count($dirs)-1)];
-        $retPhotos = dirContentsGet($dirs[$dirKey], '/\.' . $photoExt . '$/i');
-        $photoFolder = $dirs[$dirKey];
+        // Load playlist folder index to get play counts
+        $playlistName = isset($plitem['name']) ? $plitem['name'] : basename($plitem['path']);
+        $sanitizedName = sanitizePlaylistName($playlistName);
+        $indexFileName = "playlist-{$sanitizedName}-index.json";
+        $indexFilePath = $baseDir . DIRECTORY_SEPARATOR . $indexFileName;
+        
+        $folderPlayCounts = [];
+        if (file_exists($indexFilePath)) {
+            $indexData = file_get_contents($indexFilePath);
+            $index = json_decode($indexData, true);
+            if ($index) {
+                $folderPlayCounts = $index;
+            }
+        }
+        
+        // Get folders from the index (which already contains current folders)
+        $dirs = array_keys($folderPlayCounts);
+        
+        // If index is empty (first run), fall back to filesystem scan
+        if (empty($dirs)) {
+            $dirs = dirSubFoldersGet($plitem['path']);
+        }
+        
+        if (empty($dirs)) {
+            return [];
+        }
+        
+        // Find maximum play count
+        $maxPlayCount = 0;
+        foreach ($dirs as $dir) {
+            $playCount = isset($folderPlayCounts[$dir]) ? $folderPlayCounts[$dir]['play_count'] : 0;
+            $maxPlayCount = max($maxPlayCount, $playCount);
+        }
+        
+        // Filter folders to those with play count less than maximum
+        $eligibleFolders = [];
+        foreach ($dirs as $dir) {
+            $playCount = isset($folderPlayCounts[$dir]) ? $folderPlayCounts[$dir]['play_count'] : 0;
+            if ($playCount < $maxPlayCount) {
+                $eligibleFolders[] = $dir;
+            }
+        }
+        
+        // If no folders have lower play count (all equal), use all folders
+        if (empty($eligibleFolders)) {
+            $eligibleFolders = $dirs;
+        }
+        
+        // Randomly select from eligible folders
+        $selectedFolder = $eligibleFolders[random_int(0, count($eligibleFolders) - 1)];
+        $photoFolder = $selectedFolder;
+        
+        $logObj = [
+            'log' => 'smartFolderSelection',
+            'scanID' => $_SESSION['playlist-scanid'] ?? 'unknown',
+            'playlist_name' => $playlistName,
+            'total_folders' => count($dirs),
+            'eligible_folders' => count($eligibleFolders),
+            'max_play_count' => $maxPlayCount,
+            'selected_folder' => basename($selectedFolder)
+        ];
+        error_log(json_encode($logObj));
         
         // Increment folder play count
-        global $playlistsIndexFile;
-        if ($playlistsIndexFile) {
-            $baseDir = dirname($playlistsIndexFile);
+        if ($playlistsIndexFile && $baseDir) {
             incrementPlaylistFolderCount($plitem, $photoFolder, $baseDir);
         }
         
-        return $retPhotos;
+        return dirContentsGet($selectedFolder, '/\.' . $photoExt . '$/i');
     }
 }
 
