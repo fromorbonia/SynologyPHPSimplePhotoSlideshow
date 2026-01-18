@@ -65,13 +65,19 @@ class PlaylistFolderIndexTest extends TestCase
         
         $_SESSION['playlist-scanid'] = 'test-scan-folder';
         
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
         $playlist = [
             'name' => 'Test Playlist',
             'path' => $this->testDir,
             'scan-sub-folders' => true
         ];
         
-        $result = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        $result = createOrUpdatePlaylistFolderIndex($playlist, 0, $tempDir);
         
         $this->assertIsArray($result);
         $this->assertArrayHasKey('file_path', $result);
@@ -108,18 +114,24 @@ class PlaylistFolderIndexTest extends TestCase
         
         $_SESSION['playlist-scanid'] = 'test-scan-increment';
         
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
         // First create the index
-        $result = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        $result = createOrUpdatePlaylistFolderIndex($playlist, 0, $tempDir);
         
         // Then increment the count
-        incrementPlaylistFolderCount($playlist, $this->testDir, $this->testDir);
+        incrementPlaylistFolderCount($playlist, $this->testDir, $tempDir);
         
         // Verify the count was incremented
         $indexContent = json_decode(file_get_contents($result['file_path']), true);
         $this->assertEquals(1, $indexContent[$this->testDir]['play_count']);
         
         // Increment again
-        incrementPlaylistFolderCount($playlist, $this->testDir, $this->testDir);
+        incrementPlaylistFolderCount($playlist, $this->testDir, $tempDir);
         
         $indexContent = json_decode(file_get_contents($result['file_path']), true);
         $this->assertEquals(2, $indexContent[$this->testDir]['play_count']);
@@ -134,6 +146,12 @@ class PlaylistFolderIndexTest extends TestCase
     {
         $_SESSION['playlist-scanid'] = 'test-scan-guid';
         
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
         // Create test folder structure
         $subDir1 = $this->testDir . DIRECTORY_SEPARATOR . 'sub1';
         $subDir2 = $this->testDir . DIRECTORY_SEPARATOR . 'sub2';
@@ -147,7 +165,7 @@ class PlaylistFolderIndexTest extends TestCase
         ];
         
         // First call - should create new GUIDs
-        $result1 = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        $result1 = createOrUpdatePlaylistFolderIndex($playlist, 0, $tempDir);
         
         // Check that index file was created
         $this->assertFileExists($result1['file_path']);
@@ -173,7 +191,7 @@ class PlaylistFolderIndexTest extends TestCase
         }
         
         // Second call - should preserve existing GUIDs
-        $result2 = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        $result2 = createOrUpdatePlaylistFolderIndex($playlist, 0, $tempDir);
         
         $indexData2 = file_get_contents($result2['file_path']);
         $index2 = json_decode($indexData2, true);
@@ -187,6 +205,12 @@ class PlaylistFolderIndexTest extends TestCase
     public function testCreateOrUpdateFolderPictureIndex()
     {
         $_SESSION['playlist-scanid'] = 'test-scan-picture-index';
+        
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
         
         // Create test directory structure with photos
         $subDir1 = $this->testDir . DIRECTORY_SEPARATOR . 'sub1';
@@ -205,10 +229,10 @@ class PlaylistFolderIndexTest extends TestCase
             'scan-sub-folders' => true
         ];
         
-        $folderIndexResult = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        $folderIndexResult = createOrUpdatePlaylistFolderIndex($playlist, 0, $tempDir);
         
         // Now test the picture index creation
-        $result = createOrUpdateFolderPictureIndex($subDir1, 'jpg', $this->testDir);
+        $result = createOrUpdateFolderPictureIndex($subDir1, 'jpg', $tempDir);
         
         $this->assertIsArray($result);
         $this->assertArrayHasKey('file_path', $result);
@@ -247,6 +271,12 @@ class PlaylistFolderIndexTest extends TestCase
     {
         $_SESSION['playlist-scanid'] = 'test-scan-picture-changes';
         
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
         // Create test directory structure with photos
         $subDir1 = $this->testDir . DIRECTORY_SEPARATOR . 'sub1';
         mkdir($subDir1, 0777, true);
@@ -264,10 +294,10 @@ class PlaylistFolderIndexTest extends TestCase
             'scan-sub-folders' => true
         ];
         
-        $folderIndexResult = createOrUpdatePlaylistFolderIndex($playlist, 0, $this->testDir);
+        $folderIndexResult = createOrUpdatePlaylistFolderIndex($playlist, 0, $tempDir);
         
         // Create initial picture index
-        $result1 = createOrUpdateFolderPictureIndex($subDir1, 'jpg', $this->testDir);
+        $result1 = createOrUpdateFolderPictureIndex($subDir1, 'jpg', $tempDir);
         
         // Manually update play counts to test reset behavior
         $indexContent = json_decode(file_get_contents($result1['file_path']), true);
@@ -281,7 +311,7 @@ class PlaylistFolderIndexTest extends TestCase
         file_put_contents($photo3, 'test photo 3');
         
         // Update the picture index
-        $result2 = createOrUpdateFolderPictureIndex($subDir1, 'jpg', $this->testDir);
+        $result2 = createOrUpdateFolderPictureIndex($subDir1, 'jpg', $tempDir);
         
         $this->assertTrue($result2['changes_detected']);
         $this->assertEquals(3, $result2['picture_count']);

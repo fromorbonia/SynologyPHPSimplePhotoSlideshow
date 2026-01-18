@@ -44,13 +44,14 @@ function selectAndDisplayPhoto($ExcludeText) {
     while ($photosCount > 0){
         $random = array_rand($_SESSION['photos'], 1);
 
-        $photo = $_SESSION['photos'][$random];
+        // With new format, $random is the photo path, $_SESSION['photos'][$random] is the data object
+        $photo = $random;
 
         if (stripos($photo, $ExcludeText) <= 0) {
 
             if (file_exists($photo)) {
 
-                $photoInfo = extractPhotoInfoAndFormatDisplayName($_SESSION['photos'][$random]);
+                $photoInfo = extractPhotoInfoAndFormatDisplayName($photo);
 
                 //Set the current photo for image.php to display
                 $_SESSION['photo-current'] = $photo;

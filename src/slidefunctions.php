@@ -92,6 +92,10 @@ function configGet ($configFile, $playlistsIndexFile) {
     
     // Create or update individual playlist folder indices
     $baseDir = dirname($playlistsIndexFile);
+    // Ensure temp directory exists
+    if (!is_dir($baseDir)) {
+        mkdir($baseDir, 0755, true);
+    }
     $playlistFolderIndices = [];
     if (isset($config['playlist']) && is_array($config['playlist'])) {
         foreach ($config['playlist'] as $index => $playlist) {
@@ -150,16 +154,28 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
 {
     global $playlistsIndexFile;
     $baseDir = $playlistsIndexFile ? dirname($playlistsIndexFile) : '';
+    
+    // Ensure temp directory exists
+    if ($baseDir && !is_dir($baseDir)) {
+        mkdir($baseDir, 0755, true);
+    }
 
     if (!isset($plitem['scan-sub-folders']) || $plitem['scan-sub-folders'] == false) {
         $photoFolder = $plitem['path'];
         
-        // Create or update folder picture index
+        // Create or update folder picture index and return the picture data
         if ($playlistsIndexFile && $baseDir) {
-            createOrUpdateFolderPictureIndex($photoFolder, $photoExt, $baseDir);
+            $pictureIndex = playlistItemPhotosNextBatch($photoFolder, $photoExt, $baseDir);
+            return $pictureIndex ? $pictureIndex['pictures'] : [];
         }
         
-        return dirContentsGet($plitem['path'], '/\.' . $photoExt . '$/i');
+        // Fallback to simple file list if no index system available
+        $photos = dirContentsGet($plitem['path'], '/\.' . $photoExt . '$/i');
+        $photoData = [];
+        foreach ($photos as $photo) {
+            $photoData[$photo] = ['play_count' => 0];
+        }
+        return $photoData;
     } else {
         // Load playlist folder index to get play counts
         $playlistName = isset($plitem['name']) ? $plitem['name'] : basename($plitem['path']);
@@ -229,12 +245,19 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
             incrementPlaylistFolderCount($plitem, $photoFolder, $baseDir);
         }
         
-        // Create or update folder picture index for the selected folder
+        // Create or update folder picture index for the selected folder and return picture data
         if ($playlistsIndexFile && $baseDir) {
-            createOrUpdateFolderPictureIndex($selectedFolder, $photoExt, $baseDir);
+            $pictureIndex = playlistItemPhotosNextBatch($selectedFolder, $photoExt, $baseDir);
+            return $pictureIndex ? $pictureIndex['pictures'] : [];
         }
         
-        return dirContentsGet($selectedFolder, '/\.' . $photoExt . '$/i');
+        // Fallback to simple file list if no index system available
+        $photos = dirContentsGet($selectedFolder, '/\.' . $photoExt . '$/i');
+        $photoData = [];
+        foreach ($photos as $photo) {
+            $photoData[$photo] = ['play_count' => 0];
+        }
+        return $photoData;
     }
 }
 
@@ -308,8 +331,53 @@ function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir) {
         'file_path' => $indexFilePath,
         'file_name' => $indexFileName,
         'picture_count' => count($updatedIndex),
-        'changes_detected' => $hasChanges
+        'changes_detected' => $hasChanges,
+        'pictures' => $updatedIndex
     ];
+}
+
+function playlistItemPhotosNextBatch($folderPath, $photoExt, $baseDir) {
+    // Get the full picture index data
+    $pictureIndexResult = createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir);
+    
+    if (!$pictureIndexResult || !isset($pictureIndexResult['pictures'])) {
+        return $pictureIndexResult;
+    }
+    
+    $pictures = $pictureIndexResult['pictures'];
+    
+    if (empty($pictures)) {
+        return $pictureIndexResult;
+    }
+    
+    // Find maximum play count
+    $maxPlayCount = 0;
+    foreach ($pictures as $picturePath => $pictureData) {
+        $playCount = isset($pictureData['play_count']) ? $pictureData['play_count'] : 0;
+        $maxPlayCount = max($maxPlayCount, $playCount);
+    }
+    
+    // Filter out pictures with maximum play count
+    $eligiblePictures = [];
+    foreach ($pictures as $picturePath => $pictureData) {
+        $playCount = isset($pictureData['play_count']) ? $pictureData['play_count'] : 0;
+        if ($playCount < $maxPlayCount) {
+            $eligiblePictures[$picturePath] = $pictureData;
+        }
+    }
+    
+    // If no pictures have lower play count (all equal), use all pictures
+    if (empty($eligiblePictures)) {
+        $eligiblePictures = $pictures;
+    }
+    
+    // Update the result with filtered pictures
+    $pictureIndexResult['pictures'] = $eligiblePictures;
+    $pictureIndexResult['filtered_picture_count'] = count($eligiblePictures);
+    $pictureIndexResult['max_play_count'] = $maxPlayCount;
+    $pictureIndexResult['smart_filtering_applied'] = count($eligiblePictures) < count($pictures);
+    
+    return $pictureIndexResult;
 }
 
 function getFolderGuid($folderPath, $baseDir) {
@@ -489,6 +557,8 @@ function dirSubFoldersGet($dir,
                 $path = realpath($dir . DIRECTORY_SEPARATOR . $value);
 
                 if ((!str_ends_with($path, '@eaDir'))
+                    && (!str_ends_with($path, DIRECTORY_SEPARATOR . 'temp'))
+                    && ($value !== 'temp')
                     && (is_dir($path))){
                 
                         $results[] = $path;

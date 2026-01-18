@@ -6,8 +6,14 @@ require_once 'slidefunctions.php';
 // Session variables are used to prevent rescaning photo folders every time the page is refreshed.
 session_start();
 
-// Configure playlists index file path
-$playlistsIndexFile = __DIR__ . DIRECTORY_SEPARATOR . 'playlists_index.json';
+// Configure temp directory for index files
+$tempDir = __DIR__ . DIRECTORY_SEPARATOR . 'temp';
+if (!is_dir($tempDir)) {
+    mkdir($tempDir, 0755, true);
+}
+
+// Configure playlists index file path in temp directory
+$playlistsIndexFile = $tempDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
 
 // Make it available globally for other functions
 $GLOBALS['playlistsIndexFile'] = $playlistsIndexFile;

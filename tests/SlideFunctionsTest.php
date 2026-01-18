@@ -59,7 +59,13 @@ class SlideFunctionsTest extends TestCase
 
     public function testConfigGet()
     {
-        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
+        $playlistsIndexFile = $tempDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         $result = configGet($this->testConfigFile, $playlistsIndexFile);
         
         $this->assertIsArray($result);
@@ -75,7 +81,13 @@ class SlideFunctionsTest extends TestCase
         $invalidFile = $this->testDir . DIRECTORY_SEPARATOR . 'invalid.json';
         file_put_contents($invalidFile, '{invalid json}');
         
-        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
+        $playlistsIndexFile = $tempDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         $result = configGet($invalidFile, $playlistsIndexFile);
         
         $this->assertNull($result);
@@ -92,7 +104,13 @@ class SlideFunctionsTest extends TestCase
             ['name' => 'Playlist 2', 'path' => '/path/2']
         ];
         
-        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
+        $playlistsIndexFile = $tempDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         $result = playlistPick($playlistMap, $playlist, $playlistsIndexFile);
         
         $this->assertIsArray($result);
@@ -112,8 +130,14 @@ class SlideFunctionsTest extends TestCase
             ['id' => 2]
         ];
         
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
         $results = [];
-        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        $playlistsIndexFile = $tempDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         for ($i = 0; $i < 20; $i++) {
             $result = playlistPick($playlistMap, $playlist, $playlistsIndexFile);
             $results[] = $result['id'];
@@ -143,8 +167,12 @@ class SlideFunctionsTest extends TestCase
         $this->assertCount(2, $result);
         $this->assertEquals($this->testDir, $photoFolder);
         
-        foreach ($result as $photo) {
+        // New format returns associative array with photo paths as keys
+        $photoPaths = array_keys($result);
+        foreach ($photoPaths as $photo) {
             $this->assertStringEndsWith('.jpg', strtolower($photo));
+            $this->assertArrayHasKey('play_count', $result[$photo]);
+            $this->assertIsInt($result[$photo]['play_count']);
         }
     }
 
@@ -172,6 +200,13 @@ class SlideFunctionsTest extends TestCase
         $this->assertGreaterThan(0, count($result));
         $this->assertNotEmpty($photoFolder);
         $this->assertStringContainsString($this->testDir, $photoFolder);
+        
+        // New format returns associative array with photo paths as keys
+        foreach ($result as $photoPath => $photoData) {
+            $this->assertArrayHasKey('play_count', $photoData);
+            $this->assertIsInt($photoData['play_count']);
+            $this->assertStringEndsWith('.jpg', strtolower($photoPath));
+        }
     }
 
     public function testPlaylistScanBuildWithoutSubFolders()
@@ -371,7 +406,14 @@ class SlideFunctionsTest extends TestCase
         ];
         
         $configFile = $this->testDir . DIRECTORY_SEPARATOR . 'test_config.json';
-        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
+        $playlistsIndexFile = $tempDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         
         file_put_contents($configFile, json_encode($testConfig));
         
@@ -403,7 +445,14 @@ class SlideFunctionsTest extends TestCase
     public function testConfigGetUpdatesExistingIndex()
     {
         $configFile = $this->testDir . DIRECTORY_SEPARATOR . 'test_config.json';
-        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
+        $playlistsIndexFile = $tempDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         
         // Create existing index with play counts
         $existingIndex = [
@@ -452,7 +501,14 @@ class SlideFunctionsTest extends TestCase
     public function testPlaylistIncrementPlayCount()
     {
         $configFile = $this->testDir . DIRECTORY_SEPARATOR . 'test_config.json';
-        $playlistsIndexFile = $this->testDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
+        
+        // Create temp directory for index files
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        
+        $playlistsIndexFile = $tempDir . DIRECTORY_SEPARATOR . 'playlists_index.json';
         
         // Create initial index
         $initialIndex = [
