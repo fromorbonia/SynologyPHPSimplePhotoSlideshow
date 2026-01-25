@@ -4,7 +4,7 @@
 //    Primary logic for selecting and photo to display
 //**************************************************************
 
-function extractPhotoInfoAndFormatDisplayName($photoPath) {
+function extractPhotoInfoAndFormatDisplayName($photoPath, $photoData = null) {
     // Get the DateTimeOriginal field from the photo EXIF data
     $photoYear = '-';
     $photoMonth = '-';
@@ -27,18 +27,32 @@ function extractPhotoInfoAndFormatDisplayName($photoPath) {
         $plName = $plName . ' - ' . $fldName;
     }
 
+    // Extract geolocation data from the photo's index data
+    $country = null;
+    $city = null;
+    if ($photoData !== null) {
+        if (isset($photoData['country'])) {
+            $country = $photoData['country'];
+        }
+        if (isset($photoData['city'])) {
+            $city = $photoData['city'];
+        }
+    }
+
     return [
         'year' => $photoYear,
         'month' => $photoMonth,
-        'display_name' => $plName
+        'display_name' => $plName,
+        'country' => $country,
+        'city' => $city
     ];
 }
 
-function selectAndDisplayPhoto($ExcludeText) {
+function selectAndDisplayPhoto() {
     //Delete the currrent selected photo, which has already been removed from the list of photos
     unset($_SESSION['photo-current']);
 
-    // Select a random photo if the filename does not contain $excludeText
+    // Select a random photo (exclusion filtering is now done at index creation time)
     $photosCount = count($_SESSION['photos']);
 
     while ($photosCount > 0){
@@ -46,19 +60,35 @@ function selectAndDisplayPhoto($ExcludeText) {
 
         // With new format, $random is the photo path, $_SESSION['photos'][$random] is the data object
         $photo = $random;
+        $photoData = $_SESSION['photos'][$random];
 
-        if (stripos($photo, $ExcludeText) <= 0) {
+        if (file_exists($photo)) {
 
-            if (file_exists($photo)) {
+            $photoInfo = extractPhotoInfoAndFormatDisplayName($photo, $photoData);
 
-                $photoInfo = extractPhotoInfoAndFormatDisplayName($photo);
+            //Set the current photo for image.php to display
+            $_SESSION['photo-current'] = $photo;
 
-                //Set the current photo for image.php to display
-                $_SESSION['photo-current'] = $photo;
+            // Build the display string with location if available
+            $displayParts = [];
+            $displayParts[] = "Year: " . $photoInfo['year'];
+            $displayParts[] = "Month: " . $photoInfo['month'];
+            
+            // Add location info if available
+            // Show city for UK photos, otherwise show country
+                if ($photoInfo['country'] !== null) {
+                    $isUK = in_array(strtolower($photoInfo['country']), ['uk', 'united kingdom', 'great britain', 'england', 'scotland', 'wales', 'northern ireland']);
+                    if ($isUK && $photoInfo['city'] !== null) {
+                        $displayParts[] = $photoInfo['city'];
+                    } else {
+                        $displayParts[] = $photoInfo['country'];
+                    }
+                }
+                
+                $displayParts[] = $photoInfo['display_name'];
 
-                // Display the filename of the photo and DateTimeOriginal
-                echo ("<h2 class=\"ellipsis\">Year: " . $photoInfo['year'] . "&nbsp;&nbsp;&nbsp; Month: " . $photoInfo['month'] . "&nbsp;&nbsp;&nbsp;" .
-                    $photoInfo['display_name'] . "</h2>");
+                // Display the photo information
+                echo ("<h2 class=\"ellipsis\">" . implode("&nbsp;&nbsp;&nbsp;", $displayParts) . "</h2>");
                 
                 $_SESSION['photos-displayed-count'] += 1;
 
@@ -73,7 +103,6 @@ function selectAndDisplayPhoto($ExcludeText) {
             } else {
                 error_log('Photo found in initial scan, but file does not exist = ' . $photo);
             }
-        }
 
         if (!empty($_SESSION['photos']))
         {
@@ -107,7 +136,7 @@ function PrepAndSelect($PlaylistMap,
         if(empty($_SESSION['photos'])) {
             $_SESSION['photos-folder'] = '-';
             $_SESSION['photos-displayed-count'] = 0;
-            $_SESSION['photos'] = playlistItemPhotos($_SESSION['playlist-item'], $PhotoExt, $_SESSION['photos-folder']);
+            $_SESSION['photos'] = playlistItemPhotos($_SESSION['playlist-item'], $PhotoExt, $_SESSION['photos-folder'], $ExcludeText);
         
             if (empty($_SESSION['photos'])
                 || (count($_SESSION['photos']) <=0))
@@ -146,7 +175,7 @@ function PrepAndSelect($PlaylistMap,
             }
 
             if ($sessionRestart != true) {
-                selectAndDisplayPhoto($ExcludeText);
+                selectAndDisplayPhoto();
             }
         
         }

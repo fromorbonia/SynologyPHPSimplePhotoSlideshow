@@ -154,4 +154,68 @@ class SlideLogicTest extends TestCase
         // Clean up
         unlink($testPhotoWithExif);
     }
+
+    public function testExtractPhotoInfoAndFormatDisplayNameWithGeolocationData()
+    {
+        // Test with photo data containing geolocation information
+        $photoData = [
+            'play_count' => 5,
+            'country' => 'France',
+            'city' => 'Paris',
+            'gps_lat' => 48.8566,
+            'gps_lon' => 2.3522,
+            'geocode_status' => 'completed'
+        ];
+        
+        $result = extractPhotoInfoAndFormatDisplayName($this->testPhotoPath, $photoData);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('country', $result);
+        $this->assertArrayHasKey('city', $result);
+        $this->assertEquals('France', $result['country']);
+        $this->assertEquals('Paris', $result['city']);
+    }
+
+    public function testExtractPhotoInfoAndFormatDisplayNameWithPartialGeolocationData()
+    {
+        // Test with photo data containing only country (no city)
+        $photoData = [
+            'play_count' => 3,
+            'country' => 'Germany',
+            'geocode_status' => 'completed'
+        ];
+        
+        $result = extractPhotoInfoAndFormatDisplayName($this->testPhotoPath, $photoData);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals('Germany', $result['country']);
+        $this->assertNull($result['city']);
+    }
+
+    public function testExtractPhotoInfoAndFormatDisplayNameWithNoGeolocationData()
+    {
+        // Test with photo data that has no geolocation
+        $photoData = [
+            'play_count' => 0,
+            'geocode_status' => 'no_gps_data'
+        ];
+        
+        $result = extractPhotoInfoAndFormatDisplayName($this->testPhotoPath, $photoData);
+        
+        $this->assertIsArray($result);
+        $this->assertNull($result['country']);
+        $this->assertNull($result['city']);
+    }
+
+    public function testExtractPhotoInfoAndFormatDisplayNameWithNullPhotoData()
+    {
+        // Test backward compatibility - null photo data should work
+        $result = extractPhotoInfoAndFormatDisplayName($this->testPhotoPath, null);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('country', $result);
+        $this->assertArrayHasKey('city', $result);
+        $this->assertNull($result['country']);
+        $this->assertNull($result['city']);
+    }
 }

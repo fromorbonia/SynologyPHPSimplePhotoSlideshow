@@ -4,6 +4,8 @@
 //    Common functions
 //**************************************************************
 
+// Include geolocation functions
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'geolocation.php';
 
 function loadConfigWithCaching($configFile, $playlistsIndexFile) {
     $needsReload = false;
@@ -150,7 +152,7 @@ function playlistPick ($PlaylistMap, $Playlist, $playlistsIndexFile) {
     return $selectedPlaylist;
 }
 
-function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
+function playlistItemPhotos($plitem, $photoExt, &$photoFolder, $excludeText = '')
 {
     global $playlistsIndexFile;
     $baseDir = $playlistsIndexFile ? dirname($playlistsIndexFile) : '';
@@ -165,12 +167,13 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
         
         // Create or update folder picture index and return the picture data
         if ($playlistsIndexFile && $baseDir) {
-            $pictureIndex = playlistItemPhotosNextBatch($photoFolder, $photoExt, $baseDir);
+            $pictureIndex = playlistItemPhotosNextBatch($photoFolder, $photoExt, $baseDir, $excludeText);
             return $pictureIndex ? $pictureIndex['pictures'] : [];
         }
         
         // Fallback to simple file list if no index system available
-        $photos = dirContentsGet($plitem['path'], '/\.' . $photoExt . '$/i');
+        $photos = [];
+        dirContentsGet($plitem['path'], '/\.' . $photoExt . '$/i', $photos, $excludeText);
         $photoData = [];
         foreach ($photos as $photo) {
             $photoData[$photo] = ['play_count' => 0];
@@ -247,12 +250,13 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
         
         // Create or update folder picture index for the selected folder and return picture data
         if ($playlistsIndexFile && $baseDir) {
-            $pictureIndex = playlistItemPhotosNextBatch($selectedFolder, $photoExt, $baseDir);
+            $pictureIndex = playlistItemPhotosNextBatch($selectedFolder, $photoExt, $baseDir, $excludeText);
             return $pictureIndex ? $pictureIndex['pictures'] : [];
         }
         
         // Fallback to simple file list if no index system available
-        $photos = dirContentsGet($selectedFolder, '/\.' . $photoExt . '$/i');
+        $photos = [];
+        dirContentsGet($selectedFolder, '/\.' . $photoExt . '$/i', $photos, $excludeText);
         $photoData = [];
         foreach ($photos as $photo) {
             $photoData[$photo] = ['play_count' => 0];
@@ -261,7 +265,7 @@ function playlistItemPhotos($plitem, $photoExt, &$photoFolder)
     }
 }
 
-function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir) {
+function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir, $excludeText = '') {
     // Get the folder's GUID from the playlist folder index
     $folderGuid = getFolderGuid($folderPath, $baseDir);
     if (!$folderGuid) {
@@ -272,8 +276,9 @@ function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir) {
     $indexFileName = "folderpics-{$folderGuid}-index.json";
     $indexFilePath = $baseDir . DIRECTORY_SEPARATOR . $indexFileName;
     
-    // Get current pictures in the folder
-    $currentPictures = dirContentsGet($folderPath, '/\.' . $photoExt . '$/i');
+    // Get current pictures in the folder, excluding any with excludeText in the path
+    $currentPictures = [];
+    dirContentsGet($folderPath, '/\.' . $photoExt . '$/i', $currentPictures, $excludeText);
     
     // Load existing index if it exists
     $existingIndex = [];
@@ -297,22 +302,42 @@ function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir) {
         $hasChanges = false;
     }
     
-    // Build updated index
+    // Build updated index, preserving geolocation data for existing pictures
     $updatedIndex = [];
+    $needsGeolocation = false;
     foreach ($currentPictures as $picture) {
         if ($hasChanges) {
-            // If there are changes, reset all counts to 0
+            // If there are changes, reset play counts to 0 but preserve geolocation data
             $updatedIndex[$picture] = ['play_count' => 0];
+            // Preserve geolocation data if it exists for this picture
+            if (isset($existingIndex[$picture])) {
+                $geoFields = ['gps_lat', 'gps_lon', 'country', 'city', 'geocode_status', 'geocode_timestamp'];
+                foreach ($geoFields as $field) {
+                    if (isset($existingIndex[$picture][$field])) {
+                        $updatedIndex[$picture][$field] = $existingIndex[$picture][$field];
+                    }
+                }
+            }
         } else {
-            // No changes, preserve existing counts
-            $updatedIndex[$picture] = [
-                'play_count' => isset($existingIndex[$picture]) ? $existingIndex[$picture]['play_count'] : 0
-            ];
+            // No changes, preserve all existing data including geolocation
+            $updatedIndex[$picture] = isset($existingIndex[$picture]) 
+                ? $existingIndex[$picture] 
+                : ['play_count' => 0];
+        }
+        
+        // Check if this picture needs geolocation processing
+        if (!isset($updatedIndex[$picture]['geocode_status'])) {
+            $needsGeolocation = true;
         }
     }
     
     // Save the updated index
     file_put_contents($indexFilePath, json_encode($updatedIndex, JSON_PRETTY_PRINT));
+    
+    // Trigger async geolocation processing if needed
+    if ($needsGeolocation || $isFirstTime || !empty($addedPictures)) {
+        triggerAsyncGeolocationProcessing($indexFilePath);
+    }
     
     $logObj = [
         'log' => 'folderPictureIndex',
@@ -323,7 +348,8 @@ function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir) {
         'picture_count' => count($updatedIndex),
         'changes_detected' => $hasChanges,
         'added_pictures' => count($addedPictures),
-        'removed_pictures' => count($removedPictures)
+        'removed_pictures' => count($removedPictures),
+        'needs_geolocation' => $needsGeolocation
     ];
     error_log(json_encode($logObj));
     
@@ -336,9 +362,9 @@ function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir) {
     ];
 }
 
-function playlistItemPhotosNextBatch($folderPath, $photoExt, $baseDir) {
+function playlistItemPhotosNextBatch($folderPath, $photoExt, $baseDir, $excludeText = '') {
     // Get the full picture index data
-    $pictureIndexResult = createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir);
+    $pictureIndexResult = createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir, $excludeText);
     
     if (!$pictureIndexResult || !isset($pictureIndexResult['pictures'])) {
         return $pictureIndexResult;
@@ -494,6 +520,70 @@ function generateGuid() {
     return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
 }
 
+/**
+ * Trigger asynchronous geolocation processing for an index file
+ * This launches the geolocation processor in the background to avoid blocking the slideshow
+ * 
+ * @param string $indexFilePath Path to the index file that needs geolocation processing
+ * @return bool True if the process was triggered successfully
+ */
+function triggerAsyncGeolocationProcessing($indexFilePath) {
+    // Check if we should trigger processing (use a flag file to prevent multiple concurrent runs)
+    $tempDir = dirname($indexFilePath);
+    $lockFile = $tempDir . DIRECTORY_SEPARATOR . 'geolocation_processing.lock';
+    
+    // Check if processing is already running (lock file exists and is recent)
+    if (file_exists($lockFile)) {
+        $lockAge = time() - filemtime($lockFile);
+        // If lock is less than 5 minutes old, skip triggering
+        if ($lockAge < 300) {
+            return false;
+        }
+    }
+    
+    // Create/update lock file
+    file_put_contents($lockFile, json_encode([
+        'started' => time(),
+        'triggered_by' => basename($indexFilePath)
+    ]));
+    
+    // Determine the path to the geolocation processor script
+    $processorScript = __DIR__ . DIRECTORY_SEPARATOR . 'process_geolocation.php';
+    
+    if (!file_exists($processorScript)) {
+        error_log(json_encode([
+            'log' => 'triggerAsyncGeolocation',
+            'status' => 'error',
+            'message' => 'Geolocation processor script not found',
+            'script' => $processorScript
+        ]));
+        return false;
+    }
+    
+    // Find PHP executable
+    $phpBinary = PHP_BINARY;
+    
+    // Launch the processor in the background
+    // On Windows, use 'start /B', on Unix use '&'
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        // Windows: Use popen to launch without waiting
+        $command = sprintf('start /B "" "%s" "%s" --batch-size=5', $phpBinary, $processorScript);
+        pclose(popen($command, 'r'));
+    } else {
+        // Unix/Linux: Use nohup to run in background
+        $command = sprintf('nohup "%s" "%s" --batch-size=5 > /dev/null 2>&1 &', $phpBinary, $processorScript);
+        exec($command);
+    }
+    
+    error_log(json_encode([
+        'log' => 'triggerAsyncGeolocation',
+        'status' => 'triggered',
+        'index_file' => basename($indexFilePath)
+    ]));
+    
+    return true;
+}
+
 function sanitizePlaylistName($name) {
     // Remove or replace characters that are not safe for filenames (preserve hyphens and underscores)
     $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '_', $name);
@@ -524,14 +614,20 @@ function playlistScanBuild ($Playlist) {
 
 // Function getDirContents was written by stackoverflow user user2226755
 // URL: https://stackoverflow.com/questions/24783862/list-all-the-files-and-folders-in-a-directory-with-php-recursive-function
-function dirContentsGet($dir, $filter = '', &$results = array()) {
+function dirContentsGet($dir, $filter = '', &$results = array(), $excludeText = '') {
     $files = scandir($dir);
     foreach($files as $key => $value){
         $path = realpath($dir.DIRECTORY_SEPARATOR.$value);
         if(!is_dir($path)) {
-            if(empty($filter) || preg_match($filter, $path)) $results[] = $path;
+            // Apply filter (inclusion pattern)
+            if(empty($filter) || preg_match($filter, $path)) {
+                // Apply exclusion text filter (case-insensitive)
+                if (empty($excludeText) || stripos($path, $excludeText) === false) {
+                    $results[] = $path;
+                }
+            }
         } elseif($value != "." && $value != "..") {
-            dirContentsGet($path, $filter, $results);
+            dirContentsGet($path, $filter, $results, $excludeText);
         }
     }
     // Store the current date and time in the session
