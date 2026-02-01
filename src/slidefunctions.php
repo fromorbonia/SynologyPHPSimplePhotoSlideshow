@@ -311,7 +311,7 @@ function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir, $exc
             $updatedIndex[$picture] = ['play_count' => 0];
             // Preserve geolocation data if it exists for this picture
             if (isset($existingIndex[$picture])) {
-                $geoFields = ['gps_lat', 'gps_lon', 'country', 'city', 'geocode_status', 'geocode_timestamp'];
+                $geoFields = ['gps_lat', 'gps_lon', 'country', 'village', 'town', 'city', 'geocode_status', 'geocode_timestamp'];
                 foreach ($geoFields as $field) {
                     if (isset($existingIndex[$picture][$field])) {
                         $updatedIndex[$picture][$field] = $existingIndex[$picture][$field];
@@ -336,7 +336,7 @@ function createOrUpdateFolderPictureIndex($folderPath, $photoExt, $baseDir, $exc
     
     // Trigger async geolocation processing if needed
     if ($needsGeolocation || $isFirstTime || !empty($addedPictures)) {
-        triggerAsyncGeolocationProcessing($indexFilePath);
+        triggerAsyncGeolocationProcessing($indexFilePath, $batchSize=50);
     }
     
     $logObj = [
@@ -521,67 +521,344 @@ function generateGuid() {
 }
 
 /**
+ * Find the PHP CLI binary path
+ * PHP_BINARY may point to php-fpm in web server context, so we need to find the CLI version
+ * 
+ * @return string|null Path to PHP CLI binary, or null if not found
+ */
+function findPhpCliBinary() {
+    // First, check if PHP_BINARY is already the CLI version
+    $phpBinary = PHP_BINARY;
+    
+    // Check if current binary is php-fpm by looking at the name
+    $binaryName = basename($phpBinary);
+    $isFpm = (strpos($binaryName, 'fpm') !== false);
+    
+    if (!$isFpm) {
+        // Verify it's actually CLI by checking if it can run simple command
+        $testOutput = shell_exec(sprintf('"%s" -r "echo PHP_SAPI;" 2>/dev/null', $phpBinary));
+        if (trim($testOutput) === 'cli') {
+            return $phpBinary;
+        }
+    }
+    
+    // Try common PHP CLI locations
+    $possiblePaths = [];
+    
+    // Get the directory of current PHP binary and look for cli version there
+    $phpDir = dirname($phpBinary);
+    $possiblePaths[] = $phpDir . '/php';
+    $possiblePaths[] = $phpDir . '/php-cli';
+    $possiblePaths[] = $phpDir . '/../bin/php';
+    
+    // Synology-specific paths
+    $possiblePaths[] = '/usr/local/bin/php';
+    $possiblePaths[] = '/usr/local/bin/php74';
+    $possiblePaths[] = '/usr/local/bin/php80';
+    $possiblePaths[] = '/usr/local/bin/php81';
+    $possiblePaths[] = '/usr/local/bin/php82';
+    $possiblePaths[] = '/usr/local/bin/php83';
+    $possiblePaths[] = '/volume1/@appstore/PHP7.4/usr/local/bin/php74';
+    $possiblePaths[] = '/volume1/@appstore/PHP8.0/usr/local/bin/php80';
+    $possiblePaths[] = '/volume1/@appstore/PHP8.1/usr/local/bin/php81';
+    $possiblePaths[] = '/volume1/@appstore/PHP8.2/usr/local/bin/php82';
+    
+    // Standard Unix paths
+    $possiblePaths[] = '/usr/bin/php';
+    $possiblePaths[] = '/bin/php';
+    
+    foreach ($possiblePaths as $path) {
+        if (file_exists($path) && is_executable($path)) {
+            // Verify it's CLI
+            $testOutput = shell_exec(sprintf('"%s" -r "echo PHP_SAPI;" 2>/dev/null', $path));
+            if (trim($testOutput) === 'cli') {
+                error_log(json_encode([
+                    'log' => 'findPhpCliBinary',
+                    'status' => 'found',
+                    'path' => $path,
+                    'original_binary' => $phpBinary
+                ]));
+                return $path;
+            }
+        }
+    }
+    
+    // Try using 'which php' as fallback
+    $whichPhp = trim(shell_exec('which php 2>/dev/null'));
+    if (!empty($whichPhp) && file_exists($whichPhp) && is_executable($whichPhp)) {
+        $testOutput = shell_exec(sprintf('"%s" -r "echo PHP_SAPI;" 2>/dev/null', $whichPhp));
+        if (trim($testOutput) === 'cli') {
+            error_log(json_encode([
+                'log' => 'findPhpCliBinary',
+                'status' => 'found_via_which',
+                'path' => $whichPhp,
+                'original_binary' => $phpBinary
+            ]));
+            return $whichPhp;
+        }
+    }
+    
+    error_log(json_encode([
+        'log' => 'findPhpCliBinary',
+        'status' => 'not_found',
+        'original_binary' => $phpBinary,
+        'searched_paths' => $possiblePaths
+    ]));
+    
+    return null;
+}
+
+/**
  * Trigger asynchronous geolocation processing for an index file
  * This launches the geolocation processor in the background to avoid blocking the slideshow
  * 
  * @param string $indexFilePath Path to the index file that needs geolocation processing
+ * @param int $batchSize Number of photos to process per batch (default: 5)
  * @return bool True if the process was triggered successfully
  */
-function triggerAsyncGeolocationProcessing($indexFilePath) {
-    // Check if we should trigger processing (use a flag file to prevent multiple concurrent runs)
-    $tempDir = dirname($indexFilePath);
-    $lockFile = $tempDir . DIRECTORY_SEPARATOR . 'geolocation_processing.lock';
-    
-    // Check if processing is already running (lock file exists and is recent)
-    if (file_exists($lockFile)) {
-        $lockAge = time() - filemtime($lockFile);
-        // If lock is less than 5 minutes old, skip triggering
-        if ($lockAge < 300) {
-            return false;
-        }
-    }
-    
-    // Create/update lock file
-    file_put_contents($lockFile, json_encode([
-        'started' => time(),
-        'triggered_by' => basename($indexFilePath)
-    ]));
-    
-    // Determine the path to the geolocation processor script
-    $processorScript = __DIR__ . DIRECTORY_SEPARATOR . 'process_geolocation.php';
-    
-    if (!file_exists($processorScript)) {
+function triggerAsyncGeolocationProcessing($indexFilePath, $batchSize = 5) {
+    try {
+        // Check if we should trigger processing (use a flag file to prevent multiple concurrent runs)
+        $tempDir = dirname($indexFilePath);
+        $lockFile = $tempDir . DIRECTORY_SEPARATOR . 'geolocation_processing.lock';
+        
         error_log(json_encode([
             'log' => 'triggerAsyncGeolocation',
-            'status' => 'error',
-            'message' => 'Geolocation processor script not found',
-            'script' => $processorScript
+            'status' => 'starting',
+            'index_file' => $indexFilePath,
+            'temp_dir' => $tempDir,
+            'lock_file' => $lockFile
+        ]));
+        
+        // Check if processing is already running (lock file exists and is recent)
+        if (file_exists($lockFile)) {
+            $lockAge = time() - filemtime($lockFile);
+            // If lock is less than 5 minutes old, skip triggering
+            if ($lockAge < 300) {
+                error_log(json_encode([
+                    'log' => 'triggerAsyncGeolocation',
+                    'status' => 'skipped',
+                    'reason' => 'lock_file_active',
+                    'lock_age_seconds' => $lockAge,
+                    'lock_file' => $lockFile
+                ]));
+                return false;
+            }
+            error_log(json_encode([
+                'log' => 'triggerAsyncGeolocation',
+                'status' => 'lock_expired',
+                'lock_age_seconds' => $lockAge
+            ]));
+        }
+        
+        // Create/update lock file
+        $lockWriteResult = file_put_contents($lockFile, json_encode([
+            'started' => time(),
+            'triggered_by' => basename($indexFilePath)
+        ]));
+        
+        if ($lockWriteResult === false) {
+            error_log(json_encode([
+                'log' => 'triggerAsyncGeolocation',
+                'status' => 'error',
+                'message' => 'Failed to write lock file',
+                'lock_file' => $lockFile
+            ]));
+            return false;
+        }
+        
+        // Determine the path to the geolocation processor script
+        $processorScript = __DIR__ . DIRECTORY_SEPARATOR . 'process_geolocation.php';
+        
+        if (!file_exists($processorScript)) {
+            error_log(json_encode([
+                'log' => 'triggerAsyncGeolocation',
+                'status' => 'error',
+                'message' => 'Geolocation processor script not found',
+                'script' => $processorScript
+            ]));
+            return false;
+        }
+        
+        // Find PHP CLI executable
+        // PHP_BINARY may point to php-fpm in web server context, so we need to find the CLI version
+        $phpBinary = findPhpCliBinary();
+        
+        error_log(json_encode([
+            'log' => 'triggerAsyncGeolocation',
+            'status' => 'preparing_launch',
+            'php_binary' => $phpBinary,
+            'php_binary_original' => PHP_BINARY,
+            'processor_script' => $processorScript,
+            'php_os' => PHP_OS
+        ]));
+        
+        if ($phpBinary === null) {
+            error_log(json_encode([
+                'log' => 'triggerAsyncGeolocation',
+                'status' => 'error',
+                'message' => 'Could not find PHP CLI binary',
+                'php_binary_original' => PHP_BINARY
+            ]));
+            return false;
+        }
+        
+        // Launch the processor in the background
+        // On Windows, use 'start /B', on Unix use '&'
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            // Windows: Use popen to launch without waiting
+            $command = sprintf('start /B "" "%s" "%s" --batch-size=%d', $phpBinary, $processorScript, $batchSize);
+            
+            error_log(json_encode([
+                'log' => 'triggerAsyncGeolocation',
+                'status' => 'executing_windows',
+                'command' => $command
+            ]));
+            
+            $handle = popen($command, 'r');
+            if ($handle === false) {
+                error_log(json_encode([
+                    'log' => 'triggerAsyncGeolocation',
+                    'status' => 'error',
+                    'message' => 'popen failed to execute command',
+                    'command' => $command
+                ]));
+                return false;
+            }
+            $closeResult = pclose($handle);
+            
+            error_log(json_encode([
+                'log' => 'triggerAsyncGeolocation',
+                'status' => 'windows_pclose_result',
+                'pclose_return' => $closeResult
+            ]));
+        } else {
+            // Unix/Linux: Use nohup to run in background
+            // Log to a file for debugging instead of /dev/null
+            $logFile = $tempDir . DIRECTORY_SEPARATOR . 'geolocation_process.log';
+            
+            // Check if PHP binary is executable
+            if (!is_executable($phpBinary)) {
+                error_log(json_encode([
+                    'log' => 'triggerAsyncGeolocation',
+                    'status' => 'error',
+                    'message' => 'PHP binary is not executable',
+                    'php_binary' => $phpBinary,
+                    'file_exists' => file_exists($phpBinary),
+                    'is_readable' => is_readable($phpBinary)
+                ]));
+                return false;
+            }
+            
+            // Check if processor script is readable
+            if (!is_readable($processorScript)) {
+                error_log(json_encode([
+                    'log' => 'triggerAsyncGeolocation',
+                    'status' => 'error',
+                    'message' => 'Processor script is not readable',
+                    'script' => $processorScript
+                ]));
+                return false;
+            }
+            
+            // Build command with output logging for debugging
+            $command = sprintf(
+                'nohup "%s" "%s" --batch-size=%d >> "%s" 2>&1 & echo $!',
+                $phpBinary,
+                $processorScript,
+                $batchSize,
+                $logFile
+            );
+            
+            error_log(json_encode([
+                'log' => 'triggerAsyncGeolocation',
+                'status' => 'executing_unix',
+                'command' => $command,
+                'log_file' => $logFile
+            ]));
+            
+            // Use shell_exec to capture the PID
+            $pid = trim(shell_exec($command));
+            
+            error_log(json_encode([
+                'log' => 'triggerAsyncGeolocation',
+                'status' => 'unix_launched',
+                'pid' => $pid,
+                'pid_is_numeric' => is_numeric($pid)
+            ]));
+            
+            // Verify the process is actually running
+            if (is_numeric($pid) && $pid > 0) {
+                // Give process a moment to start
+                usleep(100000); // 100ms
+                
+                // Check if process is still running
+                $checkCommand = sprintf('ps -p %d -o pid= 2>/dev/null', (int)$pid);
+                $psOutput = trim(shell_exec($checkCommand));
+                $isRunning = !empty($psOutput);
+                
+                error_log(json_encode([
+                    'log' => 'triggerAsyncGeolocation',
+                    'status' => 'process_check',
+                    'pid' => $pid,
+                    'is_running' => $isRunning,
+                    'ps_output' => $psOutput
+                ]));
+                
+                if (!$isRunning) {
+                    // Process died immediately - check the log file for errors
+                    if (file_exists($logFile)) {
+                        $logContents = file_get_contents($logFile);
+                        // Get last 1000 chars to avoid huge logs
+                        $logTail = substr($logContents, -1000);
+                        error_log(json_encode([
+                            'log' => 'triggerAsyncGeolocation',
+                            'status' => 'process_died',
+                            'pid' => $pid,
+                            'log_tail' => $logTail
+                        ]));
+                    }
+                }
+            } else {
+                error_log(json_encode([
+                    'log' => 'triggerAsyncGeolocation',
+                    'status' => 'error',
+                    'message' => 'Failed to get PID from shell_exec',
+                    'pid_value' => $pid
+                ]));
+                return false;
+            }
+        }
+        
+        error_log(json_encode([
+            'log' => 'triggerAsyncGeolocation',
+            'status' => 'triggered',
+            'index_file' => basename($indexFilePath)
+        ]));
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log(json_encode([
+            'log' => 'triggerAsyncGeolocation',
+            'status' => 'exception',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]));
+        return false;
+    } catch (Error $e) {
+        error_log(json_encode([
+            'log' => 'triggerAsyncGeolocation',
+            'status' => 'fatal_error',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
         ]));
         return false;
     }
-    
-    // Find PHP executable
-    $phpBinary = PHP_BINARY;
-    
-    // Launch the processor in the background
-    // On Windows, use 'start /B', on Unix use '&'
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        // Windows: Use popen to launch without waiting
-        $command = sprintf('start /B "" "%s" "%s" --batch-size=5', $phpBinary, $processorScript);
-        pclose(popen($command, 'r'));
-    } else {
-        // Unix/Linux: Use nohup to run in background
-        $command = sprintf('nohup "%s" "%s" --batch-size=5 > /dev/null 2>&1 &', $phpBinary, $processorScript);
-        exec($command);
-    }
-    
-    error_log(json_encode([
-        'log' => 'triggerAsyncGeolocation',
-        'status' => 'triggered',
-        'index_file' => basename($indexFilePath)
-    ]));
-    
-    return true;
 }
 
 function sanitizePlaylistName($name) {

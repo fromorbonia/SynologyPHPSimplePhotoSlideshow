@@ -29,10 +29,18 @@ function extractPhotoInfoAndFormatDisplayName($photoPath, $photoData = null) {
 
     // Extract geolocation data from the photo's index data
     $country = null;
+    $village = null;
+    $town = null;
     $city = null;
     if ($photoData !== null) {
         if (isset($photoData['country'])) {
             $country = $photoData['country'];
+        }
+        if (isset($photoData['village'])) {
+            $village = $photoData['village'];
+        }
+        if (isset($photoData['town'])) {
+            $town = $photoData['town'];
         }
         if (isset($photoData['city'])) {
             $city = $photoData['city'];
@@ -44,6 +52,8 @@ function extractPhotoInfoAndFormatDisplayName($photoPath, $photoData = null) {
         'month' => $photoMonth,
         'display_name' => $plName,
         'country' => $country,
+        'village' => $village,
+        'town' => $town,
         'city' => $city
     ];
 }
@@ -75,11 +85,18 @@ function selectAndDisplayPhoto() {
             $displayParts[] = "Month: " . $photoInfo['month'];
             
             // Add location info if available
-            // Show city for UK photos, otherwise show country
+            // Show most specific location (village > town > city) for UK photos, otherwise show country
                 if ($photoInfo['country'] !== null) {
                     $isUK = in_array(strtolower($photoInfo['country']), ['uk', 'united kingdom', 'great britain', 'england', 'scotland', 'wales', 'northern ireland']);
-                    if ($isUK && $photoInfo['city'] !== null) {
-                        $displayParts[] = $photoInfo['city'];
+                    if ($isUK) {
+                        // Prioritize most specific location: village > town > city
+                        if ($photoInfo['village'] !== null) {
+                            $displayParts[] = $photoInfo['village'];
+                        } elseif ($photoInfo['town'] !== null) {
+                            $displayParts[] = $photoInfo['town'];
+                        } elseif ($photoInfo['city'] !== null) {
+                            $displayParts[] = $photoInfo['city'];
+                        }
                     } else {
                         $displayParts[] = $photoInfo['country'];
                     }

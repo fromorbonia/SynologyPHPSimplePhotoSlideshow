@@ -98,22 +98,24 @@ function gpsExifFractionToFloat($fraction) {
 }
 
 /**
- * Reverse geocode GPS coordinates to get country and city using OpenStreetMap Nominatim API
+ * Reverse geocode GPS coordinates to get location details using OpenStreetMap Nominatim API
  * 
  * @param float $latitude The latitude in decimal degrees
  * @param float $longitude The longitude in decimal degrees
- * @return array Returns ['country' => string|null, 'city' => string|null]
+ * @return array Returns ['country' => string|null, 'village' => string|null, 'town' => string|null, 'city' => string|null]
  */
 function reverseGeocode($latitude, $longitude) {
     $result = [
         'country' => null,
+        'village' => null,
+        'town' => null,
         'city' => null
     ];
     
     // OpenStreetMap Nominatim API endpoint (free, no API key required)
     // Note: Rate limit is 1 request per second
     $url = sprintf(
-        'https://nominatim.openstreetmap.org/reverse?format=json&lat=%s&lon=%s&zoom=10&addressdetails=1',
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=%s&lon=%s&zoom=13&addressdetails=1',
         urlencode($latitude),
         urlencode($longitude)
     );
@@ -153,12 +155,27 @@ function reverseGeocode($latitude, $longitude) {
         $result['country'] = $address['country'];
     }
     
-    // Extract city (try multiple fields in order of preference)
-    $cityFields = ['city', 'town', 'village', 'municipality', 'county', 'state_district'];
-    foreach ($cityFields as $field) {
-        if (isset($address[$field])) {
-            $result['city'] = $address[$field];
-            break;
+    // Extract village, town, and city separately
+    if (isset($address['village']) && !empty($address['village'])) {
+        $result['village'] = $address['village'];
+    }
+    
+    if (isset($address['town']) && !empty($address['town'])) {
+        $result['town'] = $address['town'];
+    }
+    
+    if (isset($address['city']) && !empty($address['city'])) {
+        $result['city'] = $address['city'];
+    }
+    
+    // If none of the above are set, try fallback fields for city
+    if ($result['village'] === null && $result['town'] === null && $result['city'] === null) {
+        $fallbackFields = ['municipality', 'county', 'state_district'];
+        foreach ($fallbackFields as $field) {
+            if (isset($address[$field]) && !empty($address[$field])) {
+                $result['city'] = $address[$field];
+                break;
+            }
         }
     }
     
@@ -169,13 +186,15 @@ function reverseGeocode($latitude, $longitude) {
  * Process a single photo to extract and geocode its location
  * 
  * @param string $photoPath Full path to the photo file
- * @return array Returns location data array with gps_lat, gps_lon, country, city fields
+ * @return array Returns location data array with gps_lat, gps_lon, country, village, town, city fields
  */
 function processPhotoGeolocation($photoPath) {
     $locationData = [
         'gps_lat' => null,
         'gps_lon' => null,
         'country' => null,
+        'village' => null,
+        'town' => null,
         'city' => null,
         'geocode_status' => 'not_processed'
     ];
@@ -191,10 +210,12 @@ function processPhotoGeolocation($photoPath) {
     $locationData['gps_lat'] = $gpsCoords['latitude'];
     $locationData['gps_lon'] = $gpsCoords['longitude'];
     
-    // Reverse geocode to get country and city
+    // Reverse geocode to get country and location details
     $geocodeResult = reverseGeocode($gpsCoords['latitude'], $gpsCoords['longitude']);
     
     $locationData['country'] = $geocodeResult['country'];
+    $locationData['village'] = $geocodeResult['village'];
+    $locationData['town'] = $geocodeResult['town'];
     $locationData['city'] = $geocodeResult['city'];
     $locationData['geocode_status'] = 'completed';
     $locationData['geocode_timestamp'] = time();
@@ -247,10 +268,17 @@ function updateIndexWithGeolocation($indexFilePath, $batchSize = 10, $delayBetwe
     $indexModified = false;
     
     foreach ($index as $photoPath => &$photoData) {
-        // Skip if already geocoded
-        if (isset($photoData['geocode_status']) && $photoData['geocode_status'] === 'completed') {
-            $stats['already_geocoded']++;
-            continue;
+        // Skip if already geocoded AND has the new village/town fields (or has no GPS data)
+        if (isset($photoData['geocode_status'])) {
+            if ($photoData['geocode_status'] === 'no_gps_data') {
+                $stats['already_geocoded']++;
+                continue;
+            }
+            if ($photoData['geocode_status'] === 'completed' && array_key_exists('village', $photoData)) {
+                $stats['already_geocoded']++;
+                continue;
+            }
+            // If completed but missing village field, we need to re-geocode
         }
         
         // Skip if we've reached the batch limit

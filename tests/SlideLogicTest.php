@@ -161,6 +161,8 @@ class SlideLogicTest extends TestCase
         $photoData = [
             'play_count' => 5,
             'country' => 'France',
+            'village' => null,
+            'town' => null,
             'city' => 'Paris',
             'gps_lat' => 48.8566,
             'gps_lon' => 2.3522,
@@ -171,14 +173,83 @@ class SlideLogicTest extends TestCase
         
         $this->assertIsArray($result);
         $this->assertArrayHasKey('country', $result);
+        $this->assertArrayHasKey('village', $result);
+        $this->assertArrayHasKey('town', $result);
         $this->assertArrayHasKey('city', $result);
         $this->assertEquals('France', $result['country']);
+        $this->assertNull($result['village']);
+        $this->assertNull($result['town']);
         $this->assertEquals('Paris', $result['city']);
+    }
+
+    public function testExtractPhotoInfoAndFormatDisplayNameWithVillageTownCity()
+    {
+        // Test with all location fields populated
+        $photoData = [
+            'play_count' => 5,
+            'country' => 'United Kingdom',
+            'village' => 'North Duffield',
+            'town' => 'Selby',
+            'city' => 'York',
+            'gps_lat' => 53.853008,
+            'gps_lon' => -0.993231,
+            'geocode_status' => 'completed'
+        ];
+        
+        $result = extractPhotoInfoAndFormatDisplayName($this->testPhotoPath, $photoData);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals('United Kingdom', $result['country']);
+        $this->assertEquals('North Duffield', $result['village']);
+        $this->assertEquals('Selby', $result['town']);
+        $this->assertEquals('York', $result['city']);
+    }
+
+    public function testExtractPhotoInfoAndFormatDisplayNameWithTownOnly()
+    {
+        // Test with only town populated (no village)
+        $photoData = [
+            'play_count' => 3,
+            'country' => 'United Kingdom',
+            'village' => null,
+            'town' => 'Whitby',
+            'city' => null,
+            'geocode_status' => 'completed'
+        ];
+        
+        $result = extractPhotoInfoAndFormatDisplayName($this->testPhotoPath, $photoData);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals('United Kingdom', $result['country']);
+        $this->assertNull($result['village']);
+        $this->assertEquals('Whitby', $result['town']);
+        $this->assertNull($result['city']);
+    }
+
+    public function testExtractPhotoInfoAndFormatDisplayNameWithVillageOnly()
+    {
+        // Test with only village populated
+        $photoData = [
+            'play_count' => 2,
+            'country' => 'United Kingdom',
+            'village' => 'Goathland',
+            'town' => null,
+            'city' => null,
+            'geocode_status' => 'completed'
+        ];
+        
+        $result = extractPhotoInfoAndFormatDisplayName($this->testPhotoPath, $photoData);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals('United Kingdom', $result['country']);
+        $this->assertEquals('Goathland', $result['village']);
+        $this->assertNull($result['town']);
+        $this->assertNull($result['city']);
     }
 
     public function testExtractPhotoInfoAndFormatDisplayNameWithPartialGeolocationData()
     {
-        // Test with photo data containing only country (no city)
+        // Test with photo data containing only country (no village, town, or city)
         $photoData = [
             'play_count' => 3,
             'country' => 'Germany',
@@ -189,6 +260,8 @@ class SlideLogicTest extends TestCase
         
         $this->assertIsArray($result);
         $this->assertEquals('Germany', $result['country']);
+        $this->assertNull($result['village']);
+        $this->assertNull($result['town']);
         $this->assertNull($result['city']);
     }
 
@@ -204,6 +277,8 @@ class SlideLogicTest extends TestCase
         
         $this->assertIsArray($result);
         $this->assertNull($result['country']);
+        $this->assertNull($result['village']);
+        $this->assertNull($result['town']);
         $this->assertNull($result['city']);
     }
 
@@ -214,8 +289,12 @@ class SlideLogicTest extends TestCase
         
         $this->assertIsArray($result);
         $this->assertArrayHasKey('country', $result);
+        $this->assertArrayHasKey('village', $result);
+        $this->assertArrayHasKey('town', $result);
         $this->assertArrayHasKey('city', $result);
         $this->assertNull($result['country']);
+        $this->assertNull($result['village']);
+        $this->assertNull($result['town']);
         $this->assertNull($result['city']);
     }
 }

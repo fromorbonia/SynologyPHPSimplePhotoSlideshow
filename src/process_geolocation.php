@@ -33,7 +33,7 @@ require_once __DIR__ . '/geolocation.php';
 // Default configuration
 $config = [
     'batch_size' => 10,
-    'delay_ms' => 1100,
+    'delay_ms' => 2000,
     'single_run' => true,
     'interval' => 60,
     'verbose' => false
