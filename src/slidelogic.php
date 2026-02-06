@@ -4,6 +4,39 @@
 //    Primary logic for selecting and photo to display
 //**************************************************************
 
+function getFreshPhotoDataFromIndex($photoPathFile, $photosFolder) {
+    // Get the latest photo data from the index file
+    global $playlistsIndexFile;
+    $baseDir = $playlistsIndexFile ? dirname($playlistsIndexFile) : '';
+    
+    if (!$baseDir || !$photosFolder) {
+        return null;
+    }
+    
+    // Get the folder GUID
+    $folderGuid = getFolderGuid($photosFolder, $baseDir);
+    if (!$folderGuid) {
+        return null;
+    }
+    
+    // Read the index file
+    $indexFileName = "folderpics-{$folderGuid}-index.json";
+    $indexFilePath = $baseDir . DIRECTORY_SEPARATOR . $indexFileName;
+    
+    if (!file_exists($indexFilePath)) {
+        return null;
+    }
+    
+    $indexData = file_get_contents($indexFilePath);
+    $index = json_decode($indexData, true);
+    
+    if ($index && isset($index[$photoPathFile])) {
+        return $index[$photoPathFile];
+    }
+    
+    return null;
+}
+
 function extractPhotoInfoAndFormatDisplayName($photoPath, $photoData = null) {
     // Get the DateTimeOriginal field from the photo EXIF data
     $photoYear = '-';
@@ -70,7 +103,14 @@ function selectAndDisplayPhoto() {
 
         // With new format, $random is the photo path, $_SESSION['photos'][$random] is the data object
         $photo = $random;
-        $photoData = $_SESSION['photos'][$random];
+        
+        // Get fresh photo data from index file to include any async geolocation updates
+        $photoData = getFreshPhotoDataFromIndex($photo, $_SESSION['photos-folder']);
+        
+        // Fallback to session data if index read fails
+        if ($photoData === null) {
+            $photoData = $_SESSION['photos'][$random];
+        }
 
         if (file_exists($photo)) {
 
@@ -81,9 +121,17 @@ function selectAndDisplayPhoto() {
 
             // Build the display string with location if available
             $displayParts = [];
-            $displayParts[] = "Year: " . $photoInfo['year'];
-            $displayParts[] = "Month: " . $photoInfo['month'];
             
+            // Only display month if there is a year; if there is a year but no month, only output year
+            if ($photoInfo['year'] !== '-') {
+                $displayParts[] = $photoInfo['year'];
+                if ($photoInfo['month'] !== '-') {
+                    $displayParts[] = $photoInfo['month'];
+                }
+            }
+
+            $displayParts[] = $photoInfo['display_name'];
+
             // Add location info if available
             // Show most specific location (village > town > city) for UK photos, otherwise show country
                 if ($photoInfo['country'] !== null) {
@@ -102,10 +150,24 @@ function selectAndDisplayPhoto() {
                     }
                 }
                 
-                $displayParts[] = $photoInfo['display_name'];
 
-                // Display the photo information
-                echo ("<h2 class=\"ellipsis\">" . implode("&nbsp;&nbsp;&nbsp;", $displayParts) . "</h2>");
+                // Store photo information for the info button
+                $_SESSION['current-photo-info'] = [
+                    'year' => $photoInfo['year'],
+                    'month' => $photoInfo['month'],
+                    'display_name' => $photoInfo['display_name'],
+                    'country' => $photoInfo['country'],
+                    'village' => $photoInfo['village'],
+                    'town' => $photoInfo['town'],
+                    'city' => $photoInfo['city'],
+                    'file_path' => basename($photo)
+                ];
+                
+                // Display the photo information with info button
+                echo ('<div class="photo-info-container">');
+                echo ("<h2 class=\"ellipsis\">" . implode("&nbsp;&nbsp;", $displayParts) . "</h2>");
+                echo ('<button onclick="showPhotoInfo()" class="info-button">info</button>');
+                echo ('</div>');
                 
                 $_SESSION['photos-displayed-count'] += 1;
 
