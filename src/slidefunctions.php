@@ -872,6 +872,7 @@ function sanitizePlaylistName($name) {
 }
 
 function playlistScanBuild ($Playlist) {
+    $_SESSION['dir-errors'] = [];
     $playlistSizeMap = array();
 
     foreach($Playlist as $key => $plitem){
@@ -880,7 +881,7 @@ function playlistScanBuild ($Playlist) {
         if ($plitem['scan-sub-folders']) {
             $folders = null;
             dirSubFoldersGet($plitem['path'], $folders, true);
-            $folderCount = count($folders);
+            $folderCount = is_array($folders) ? count($folders) : 1;
         }
 
         $playlistSizeMap = array_merge($playlistSizeMap, array_fill(0, $folderCount, $key)); 
@@ -921,7 +922,19 @@ function dirSubFoldersGet($dir,
 {
     try {
 
+        if (!is_dir($dir)) {
+            error_log('dirSubFoldersGet: directory not found = ' . $dir);
+            $label = basename($dir);
+            $_SESSION['dir-errors'][] = 'Folder not found: ' . $label . ' (' . $dir . ')';
+            return $results;
+        }
+
         $files = scandir($dir);
+
+        if ($files === false) {
+            error_log('dirSubFoldersGet: scandir failed for = ' . $dir);
+            return $results;
+        }
 
         foreach($files as $key => $value) {
             if (($value !=='.')

@@ -166,6 +166,9 @@ function selectAndDisplayPhoto() {
                 // Display the photo information with info button
                 echo ('<div class="photo-info-container">');
                 echo ("<h2 class=\"ellipsis\">" . implode("&nbsp;&nbsp;", $displayParts) . "</h2>");
+                if (!empty($_SESSION['dir-errors'])) {
+                    echo ('<button onclick="showDirErrors()" class="info-button errors-button">errors</button>');
+                }
                 echo ('<button onclick="showPhotoInfo()" class="info-button">info</button>');
                 echo ('</div>');
                 

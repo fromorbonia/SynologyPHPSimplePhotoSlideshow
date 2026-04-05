@@ -330,4 +330,151 @@ class PlaylistFolderIndexTest extends TestCase
             unlink($folderIndexResult['file_path']);
         }
     }
+
+    // -----------------------------------------------------------------------
+    // playlistScanBuild: missing-directory resilience tests
+    // -----------------------------------------------------------------------
+
+    /**
+     * When all playlist directories exist, playlistScanBuild should return a
+     * non-empty map and leave dir-errors empty so no errors button appears.
+     */
+    public function testPlaylistScanBuildWithAllValidDirectoriesProducesMapAndNoErrors()
+    {
+        $dir1 = $this->testDir . DIRECTORY_SEPARATOR . 'valid1';
+        $dir2 = $this->testDir . DIRECTORY_SEPARATOR . 'valid2';
+        mkdir($dir1, 0777, true);
+        mkdir($dir2, 0777, true);
+
+        $playlist = [
+            ['path' => $dir1, 'scan-sub-folders' => false],
+            ['path' => $dir2, 'scan-sub-folders' => false],
+        ];
+
+        $map = playlistScanBuild($playlist);
+
+        // Map must be a non-empty array so PrepAndSelect can choose a folder
+        $this->assertIsArray($map);
+        $this->assertNotEmpty($map);
+
+        // Both playlist keys (0 and 1) must appear in the map
+        $this->assertContains(0, $map);
+        $this->assertContains(1, $map);
+
+        // No directory errors should have been recorded
+        $this->assertEmpty($_SESSION['dir-errors']);
+    }
+
+    /**
+     * When a playlist directory does not exist, playlistScanBuild must still
+     * return a valid (non-empty) map so that the slideshow can continue
+     * displaying photos from the remaining valid entries.
+     */
+    public function testPlaylistScanBuildWithMissingDirectoryStillReturnsUsableMap()
+    {
+        $validDir = $this->testDir . DIRECTORY_SEPARATOR . 'valid';
+        mkdir($validDir, 0777, true);
+
+        $missingDir = $this->testDir . DIRECTORY_SEPARATOR . 'does_not_exist';
+
+        $playlist = [
+            ['path' => $validDir,  'scan-sub-folders' => false],
+            ['path' => $missingDir, 'scan-sub-folders' => true],
+        ];
+
+        $map = playlistScanBuild($playlist);
+
+        // The map must be an array (not false / null) so the slideshow loop works
+        $this->assertIsArray($map);
+        $this->assertNotEmpty($map);
+    }
+
+    /**
+     * A missing directory must be registered in $_SESSION['dir-errors'] so
+     * the errors button appears in the UI.
+     */
+    public function testPlaylistScanBuildWithMissingDirectoryRecordsDirError()
+    {
+        $missingDir = $this->testDir . DIRECTORY_SEPARATOR . 'no_such_folder';
+
+        $playlist = [
+            ['path' => $missingDir, 'scan-sub-folders' => true],
+        ];
+
+        playlistScanBuild($playlist);
+
+        $this->assertNotEmpty($_SESSION['dir-errors']);
+        // The error message should mention the missing folder name
+        $this->assertStringContainsString('no_such_folder', $_SESSION['dir-errors'][0]);
+    }
+
+    /**
+     * A missing directory should still receive a map entry (folderCount = 1)
+     * so the playlist index for that entry is preserved and the next-photo
+     * logic does not skip the entry entirely.
+     */
+    public function testPlaylistScanBuildMissingDirectoryGetsMinimumFolderCountOfOne()
+    {
+        $missingDir = $this->testDir . DIRECTORY_SEPARATOR . 'missing_album';
+
+        $playlist = [
+            ['path' => $missingDir, 'scan-sub-folders' => true],
+        ];
+
+        $map = playlistScanBuild($playlist);
+
+        $this->assertIsArray($map);
+        // Exactly one slot should be reserved (folderCount fell back to 1)
+        $this->assertCount(1, $map);
+        $this->assertEquals(0, $map[0]); // playlist key 0 retained
+    }
+
+    /**
+     * When a playlist has a mix of valid and missing directories, every
+     * playlist entry must appear in the map so no entry is silently dropped,
+     * and only the missing directories are recorded as errors.
+     */
+    public function testPlaylistScanBuildMixedDirectoriesAllEntriesAppearInMap()
+    {
+        $validDir   = $this->testDir . DIRECTORY_SEPARATOR . 'album_ok';
+        $missingDir = $this->testDir . DIRECTORY_SEPARATOR . 'album_gone';
+        mkdir($validDir, 0777, true);
+
+        $playlist = [
+            ['path' => $validDir,   'scan-sub-folders' => false],
+            ['path' => $missingDir, 'scan-sub-folders' => true],
+        ];
+
+        $map = playlistScanBuild($playlist);
+
+        $this->assertIsArray($map);
+        $this->assertContains(0, $map, 'Valid directory entry must appear in map');
+        $this->assertContains(1, $map, 'Missing directory entry must still appear in map');
+
+        // Only the missing directory should be an error
+        $this->assertCount(1, $_SESSION['dir-errors']);
+        $this->assertStringContainsString('album_gone', $_SESSION['dir-errors'][0]);
+    }
+
+    /**
+     * Stale errors from a previous scan must be cleared when a new scan
+     * starts, so the errors button reflects only the current state.
+     */
+    public function testPlaylistScanBuildClearsPreviousErrorsOnEachRun()
+    {
+        // Pre-populate errors from a previous scan
+        $_SESSION['dir-errors'] = ['Folder not found: stale_error (/old/path)'];
+
+        $validDir = $this->testDir . DIRECTORY_SEPARATOR . 'fresh_album';
+        mkdir($validDir, 0777, true);
+
+        $playlist = [
+            ['path' => $validDir, 'scan-sub-folders' => false],
+        ];
+
+        playlistScanBuild($playlist);
+
+        // Stale error must be gone; no new errors for the valid directory
+        $this->assertEmpty($_SESSION['dir-errors']);
+    }
 }

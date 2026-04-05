@@ -138,6 +138,15 @@ PrepAndSelect($_SESSION['playlist-size-map'],
             background: rgba(255,255,255,0.3);
         }
 
+        .errors-button {
+            border-color: rgba(255, 120, 80, 0.7);
+            color: rgba(255, 120, 80, 0.9);
+        }
+
+        .errors-button:hover {
+            background: rgba(255, 120, 80, 0.2);
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -210,6 +219,14 @@ PrepAndSelect($_SESSION['playlist-size-map'],
         </div>
     </div>
 
+    <div id="dirErrorsModal" class="modal">
+        <div class="modal-content">
+            <h3>Configuration Errors</h3>
+            <div id="dirErrorsContent" class="info-content"></div>
+            <button onclick="closeDirErrors()" class="close-button">Close</button>
+        </div>
+    </div>
+
     <script>
         var currentPhotoInfo = {};
 
@@ -254,6 +271,28 @@ PrepAndSelect($_SESSION['playlist-size-map'],
         document.getElementById("photoInfoModal").addEventListener("click", function(e) {
             if (e.target === this) {
                 closePhotoInfo();
+            }
+        });
+
+        var dirErrors = <?php echo json_encode(!empty($_SESSION['dir-errors']) ? $_SESSION['dir-errors'] : []); ?>;
+
+        function showDirErrors() {
+            var modal = document.getElementById("dirErrorsModal");
+            var content = "";
+            dirErrors.forEach(function(msg) {
+                content += "<div>" + msg + "</div>";
+            });
+            document.getElementById("dirErrorsContent").innerHTML = content;
+            modal.style.display = "flex";
+        }
+
+        function closeDirErrors() {
+            document.getElementById("dirErrorsModal").style.display = "none";
+        }
+
+        document.getElementById("dirErrorsModal").addEventListener("click", function(e) {
+            if (e.target === this) {
+                closeDirErrors();
             }
         });
     </script>
