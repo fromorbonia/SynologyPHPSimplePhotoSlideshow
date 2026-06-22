@@ -55,13 +55,19 @@ function buildStatsPayload(string $tempDir): array {
 
         $photoCount = count($data);
         $totalViews = 0;
+        $viewedCount = 0;
         foreach ($data as $photoInfo) {
-            $totalViews += $photoInfo['play_count'] ?? 0;
+            $playCount = $photoInfo['play_count'] ?? 0;
+            $totalViews += $playCount;
+            if ($playCount > 0) {
+                $viewedCount++;
+            }
         }
 
         $guidToPhotoStats[$guid] = [
             'photo_count' => $photoCount,
             'total_views' => $totalViews,
+            'viewed_count' => $viewedCount,
         ];
     }
 
@@ -76,6 +82,7 @@ function buildStatsPayload(string $tempDir): array {
         $folders = [];
         $totalPhotos = 0;
         $totalPhotoViews = 0;
+        $totalViewedPhotos = 0;
 
         if (isset($folderFileByPlaylist[$folderIndexKey])) {
             foreach ($folderFileByPlaylist[$folderIndexKey] as $folderPath => $folderInfo) {
@@ -83,14 +90,21 @@ function buildStatsPayload(string $tempDir): array {
                 $folderPlayCount = $folderInfo['play_count'] ?? 0;
                 $photoCount = 0;
                 $photoViews = 0;
+                $viewedCount = 0;
 
                 if ($guid && isset($guidToPhotoStats[$guid])) {
                     $photoCount = $guidToPhotoStats[$guid]['photo_count'];
                     $photoViews = $guidToPhotoStats[$guid]['total_views'];
+                    $viewedCount = $guidToPhotoStats[$guid]['viewed_count'];
                 }
 
                 $totalPhotos += $photoCount;
                 $totalPhotoViews += $photoViews;
+                $totalViewedPhotos += $viewedCount;
+
+                $viewedRatio = $photoCount > 0
+                    ? round(($viewedCount / $photoCount) * 100, 1)
+                    : 0.0;
 
                 $folders[] = [
                     'path' => $folderPath,
@@ -98,11 +112,17 @@ function buildStatsPayload(string $tempDir): array {
                     'play_count' => $folderPlayCount,
                     'photo_count' => $photoCount,
                     'photo_views' => $photoViews,
+                    'viewed_count' => $viewedCount,
+                    'viewed_ratio' => $viewedRatio,
                 ];
             }
         }
 
         usort($folders, fn($a, $b) => $b['play_count'] - $a['play_count']);
+
+        $viewedRatio = $totalPhotos > 0
+            ? round(($totalViewedPhotos / $totalPhotos) * 100, 1)
+            : 0.0;
 
         $stats['playlists'][] = [
             'path' => $playlistPath,
@@ -111,6 +131,8 @@ function buildStatsPayload(string $tempDir): array {
             'folder_count' => count($folders),
             'total_photos' => $totalPhotos,
             'total_photo_views' => $totalPhotoViews,
+            'viewed_photos' => $totalViewedPhotos,
+            'viewed_ratio' => $viewedRatio,
             'folders' => $folders,
         ];
     }

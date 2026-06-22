@@ -325,10 +325,10 @@ $statsJson = json_encode($stats, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UN
     <button class="tab-btn" data-tab="table">Table</button>
 </div>
 
-<!-- Overview tab: playlist play counts -->
+<!-- Overview tab: playlist coverage -->
 <div id="tab-overview" class="tab-panel">
     <div class="section">
-        <h2>Playlist play counts <span style="font-weight:400;font-size:0.8em;color:var(--subtext)">(click a bar to drill into folders)</span></h2>
+        <h2>Playlist viewing coverage <span style="font-weight:400;font-size:0.8em;color:var(--subtext)">(each bar is 100%; click a bar to drill into folders)</span></h2>
         <div class="chart-wrap"><canvas id="chart-playlists-plays"></canvas></div>
     </div>
 </div>
@@ -478,25 +478,74 @@ function renderPlaylistCharts() {
     const playlists = STATS.playlists;
     const labels     = playlists.map(p => p.name);
 
-    // Tab: overview – playlist plays
-    const playsData = playlists.map(p => p.play_count);
-    playlistChart = makeBarChart(
-        'chart-playlists-plays',
-        labels,
-        [{
-            label: 'Playlist plays',
-            data:  playsData,
-            backgroundColor: playlists.map((_, i) => color(i) + 'cc'),
-            borderColor:     playlists.map((_, i) => color(i)),
-            borderWidth: 1,
-            borderRadius: 4,
-        }],
-        (event, elements) => {
-            if (elements.length > 0) {
-                showDrilldown(playlists[elements[0].index]);
+    // Tab: overview – viewed/not-viewed coverage (100% stacked bars)
+    const viewedRatios = playlists.map(p => Number(p.viewed_ratio || 0));
+    const unviewedRatios = viewedRatios.map(v => Math.max(0, 100 - v));
+
+    const coverageCtx = document.getElementById('chart-playlists-plays').getContext('2d');
+    playlistChart = new Chart(coverageCtx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Viewed %',
+                    data: viewedRatios,
+                    backgroundColor: '#53d8fbcc',
+                    borderColor: '#53d8fb',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                },
+                {
+                    label: 'Not viewed %',
+                    data: unviewedRatios,
+                    backgroundColor: '#2a2a4ecc',
+                    borderColor: '#2a2a4e',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            indexAxis: 'y',
+            onClick: (event, elements) => {
+                if (elements.length > 0) {
+                    showDrilldown(playlists[elements[0].index]);
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: '#e0e0e0', font: { size: 12 } }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` ${ctx.dataset.label}: ${Number(ctx.parsed.x).toFixed(1)}%`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    max: 100,
+                    stacked: true,
+                    ticks: {
+                        color: '#a0a0b0',
+                        font: { size: 11 },
+                        callback: v => `${v}%`
+                    },
+                    grid: { color: '#2a2a4e' }
+                },
+                y: {
+                    stacked: true,
+                    ticks: { color: '#a0a0b0', font: { size: 11 } },
+                    grid: { color: '#2a2a4e' }
+                }
             }
         }
-    );
+    });
 
     // Tab: views – photo views
     makeBarChart(

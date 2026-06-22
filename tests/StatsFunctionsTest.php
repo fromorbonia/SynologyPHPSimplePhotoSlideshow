@@ -94,6 +94,7 @@ class StatsFunctionsTest extends TestCase
             $this->tempDir . DIRECTORY_SEPARATOR . 'folderpics-22222222-2222-2222-2222-222222222222-index.json',
             [
                 '/photo/family/B/p3.jpg' => ['play_count' => 9, 'city' => 'Leeds'],
+                '/photo/family/B/p4.jpg' => ['play_count' => 0, 'city' => 'Leeds'],
             ]
         );
 
@@ -111,20 +112,26 @@ class StatsFunctionsTest extends TestCase
 
         $family = $stats['playlists'][0];
         $this->assertSame(2, $family['folder_count']);
-        $this->assertSame(3, $family['total_photos']);
+        $this->assertSame(4, $family['total_photos']);
         $this->assertSame(13, $family['total_photo_views']);
+        $this->assertSame(3, $family['viewed_photos']);
+        $this->assertEquals(75.0, $family['viewed_ratio']);
 
         // Folders sorted by folder play_count desc: B (5) then A (2)
         $this->assertCount(2, $family['folders']);
         $this->assertSame('B', $family['folders'][0]['name']);
         $this->assertSame(5, $family['folders'][0]['play_count']);
-        $this->assertSame(1, $family['folders'][0]['photo_count']);
+        $this->assertSame(2, $family['folders'][0]['photo_count']);
         $this->assertSame(9, $family['folders'][0]['photo_views']);
+        $this->assertSame(1, $family['folders'][0]['viewed_count']);
+        $this->assertEquals(50.0, $family['folders'][0]['viewed_ratio']);
 
         $this->assertSame('A', $family['folders'][1]['name']);
         $this->assertSame(2, $family['folders'][1]['play_count']);
         $this->assertSame(2, $family['folders'][1]['photo_count']);
         $this->assertSame(4, $family['folders'][1]['photo_views']);
+        $this->assertSame(2, $family['folders'][1]['viewed_count']);
+        $this->assertEquals(100.0, $family['folders'][1]['viewed_ratio']);
 
         // Playlist without index file should still exist with zero folder/photo totals
         $other = $stats['playlists'][1];
@@ -132,6 +139,8 @@ class StatsFunctionsTest extends TestCase
         $this->assertSame(0, $other['folder_count']);
         $this->assertSame(0, $other['total_photos']);
         $this->assertSame(0, $other['total_photo_views']);
+        $this->assertSame(0, $other['viewed_photos']);
+        $this->assertEquals(0.0, $other['viewed_ratio']);
         $this->assertSame([], $other['folders']);
     }
 
