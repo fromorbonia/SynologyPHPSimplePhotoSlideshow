@@ -119,6 +119,11 @@ function selectAndDisplayPhoto() {
             //Set the current photo for image.php to display
             $_SESSION['photo-current'] = $photo;
 
+            // Persist per-photo play count in folderpics-<GUID>-index.json
+            global $playlistsIndexFile;
+            $baseDir = $playlistsIndexFile ? dirname($playlistsIndexFile) : '';
+            incrementPhotoPlayCount($photo, $_SESSION['photos-folder'], $baseDir);
+
             // Build the display string with location if available
             $displayParts = [];
             

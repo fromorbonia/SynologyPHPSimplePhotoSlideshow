@@ -512,6 +512,47 @@ function incrementPlaylistFolderCount($playlist, $folderPath, $baseDir) {
     }
 }
 
+function incrementPhotoPlayCount($photoPath, $photosFolder, $baseDir) {
+    if (!$photoPath || !$photosFolder || !$baseDir) {
+        return false;
+    }
+
+    $folderGuid = getFolderGuid($photosFolder, $baseDir);
+    if (!$folderGuid) {
+        return false;
+    }
+
+    $indexFileName = "folderpics-{$folderGuid}-index.json";
+    $indexFilePath = $baseDir . DIRECTORY_SEPARATOR . $indexFileName;
+
+    if (!file_exists($indexFilePath)) {
+        return false;
+    }
+
+    $indexData = file_get_contents($indexFilePath);
+    $index = json_decode($indexData, true);
+
+    if (!$index || !isset($index[$photoPath])) {
+        return false;
+    }
+
+    $currentCount = isset($index[$photoPath]['play_count']) ? (int)$index[$photoPath]['play_count'] : 0;
+    $index[$photoPath]['play_count'] = $currentCount + 1;
+
+    file_put_contents($indexFilePath, json_encode($index, JSON_PRETTY_PRINT));
+
+    $logObj = [
+        'log' => 'photoPlayCountIncrement',
+        'scanID' => $_SESSION['playlist-scanid'] ?? 'unknown',
+        'folder_guid' => $folderGuid,
+        'photo' => basename($photoPath),
+        'new_count' => $index[$photoPath]['play_count']
+    ];
+    error_log(json_encode($logObj));
+
+    return true;
+}
+
 function generateGuid() {
     // Generate a UUID v4
     $data = random_bytes(16);

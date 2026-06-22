@@ -53,6 +53,37 @@ To install you do need to carry out a few tasks that will vary depending on the 
 
 ### Development and Testing
 
+#### Required PHP Modules
+
+The slideshow and stats pages need a few PHP modules enabled.
+
+Minimum required for runtime:
+
+* `json` - reads and writes config and index files
+* `libxml` - XML support used by standard XML-related modules
+* `dom` - required by PHPUnit tooling and XML handling
+* `xml` - required by PHPUnit (`phpunit.xml` parsing)
+* `xmlwriter` - required by PHPUnit output
+
+Required for full photo metadata features:
+
+* `exif` - reads photo EXIF data (date and GPS metadata)
+* `mbstring` - required by PHPUnit and recommended generally
+
+Most PHP builds include `json` and `libxml` by default, but on some Windows installs (and some Synology package setups) `mbstring`, `dom`, `xml`, `xmlwriter`, and `exif` must be enabled in `php.ini`.
+
+Quick check:
+
+```bash
+php -m
+```
+
+Windows quick check:
+
+```powershell
+php -m | findstr /I "json libxml dom xml xmlwriter exif mbstring"
+```
+
 #### Installing Dependencies
 
 This project uses Composer for dependency management and PHPUnit for testing.

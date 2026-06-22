@@ -248,6 +248,48 @@ class SlideFunctionsTest extends TestCase
         $this->assertEquals(1, $result[2]);
     }
 
+    public function testIncrementPhotoPlayCountUpdatesFolderPicsIndex()
+    {
+        $_SESSION['playlist-scanid'] = 'test-scan-photo-inc';
+
+        $tempDir = $this->testDir . DIRECTORY_SEPARATOR . 'temp';
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $folderPath = $this->testDir . DIRECTORY_SEPARATOR . 'album';
+        if (!is_dir($folderPath)) {
+            mkdir($folderPath, 0777, true);
+        }
+
+        $photoPath = $folderPath . DIRECTORY_SEPARATOR . 'photo1.jpg';
+        touch($photoPath);
+
+        $playlist = [
+            'name' => 'Test Playlist',
+            'path' => $folderPath,
+            'scan-sub-folders' => false
+        ];
+
+        // Create the playlist folder index so getFolderGuid() can resolve the GUID.
+        createOrUpdatePlaylistFolderIndex($playlist, 0, $tempDir);
+        $folderGuid = getFolderGuid($folderPath, $tempDir);
+
+        $this->assertNotNull($folderGuid);
+
+        $folderPicsIndexPath = $tempDir . DIRECTORY_SEPARATOR . "folderpics-{$folderGuid}-index.json";
+        file_put_contents($folderPicsIndexPath, json_encode([
+            $photoPath => ['play_count' => 0]
+        ], JSON_PRETTY_PRINT));
+
+        $ok = incrementPhotoPlayCount($photoPath, $folderPath, $tempDir);
+        $this->assertTrue($ok);
+
+        $updatedIndex = json_decode(file_get_contents($folderPicsIndexPath), true);
+        $this->assertIsArray($updatedIndex);
+        $this->assertEquals(1, $updatedIndex[$photoPath]['play_count']);
+    }
+
     public function testDirContentsGetWithNoFilter()
     {
         // Create test files
